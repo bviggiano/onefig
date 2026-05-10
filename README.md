@@ -158,53 +158,48 @@ useful when integrating with an argparse-driven entry point.
 
 ### Shell tab completion
 
-`update_from_cli` recognizes two flags that drive shell completion for
-overridable fields. The first prints an install snippet for `bash`, `zsh`,
-or `fish`; the second is a machine-readable interface that the installed
-script calls back into:
+Installing onefig adds an `onefig` console command with two install
+helpers for shell tab completion. The recommended one-time setup hooks
+completion onto `python` itself, so every onefig-based script invoked
+via `python script.py` gets completion automatically:
 
 ```bash
-# Install for the current bash session.
-source <(./train.py --onefig-install-completion bash)
+# One-time install for the current shell.
+onefig install-python-completion bash >> ~/.bashrc
+source ~/.bashrc
 
-# Or persist for future sessions.
-./train.py --onefig-install-completion bash >> ~/.bashrc
-
-# Then completion is available on TAB.
-./train.py opt<TAB>          # → optimizer.kind=  optimizer.lr=  ...
-./train.py l<TAB>            # → lr=
+# Then TAB completion works on any onefig script invoked via python.
+python train.py opt<TAB>          # → optimizer.kind=  optimizer.lr=  ...
+python train.py l<TAB>            # → lr=
 ```
 
 The completion list contains every overridable full dotted path (suffixed
 with `=`), every unambiguous leaf-name shortcut, and the special flags
 `--show`, `--help`, `-h`. Ambiguous leaves are deliberately omitted so
-users aren't offered a shortcut the override engine would refuse.
-
-The shell binds completion to the command name (e.g. `train.py`), so the
-snippet above only fires when the script is invoked directly. To get
-completion for the more common `python script.py` form, install a
-generic wrapper that hooks completion onto `python` and `python3`:
-
-```bash
-# One-time install. Source for the current session...
-source <(./train.py --onefig-install-python-completion bash)
-
-# ...or persist for future sessions.
-./train.py --onefig-install-python-completion bash >> ~/.bashrc
-```
-
-After this, every onefig-based script invoked via `python` gets
-completion automatically:
-
-```bash
-python train.py opt<TAB>          # → optimizer.kind=  optimizer.lr=  ...
-python any_other_onefig_script.py l<TAB>  # → lr=
-```
-
-The wrapper finds the first `.py` argument on the command line, calls
+users aren't offered a shortcut the override engine would refuse. The
+wrapper finds the first `.py` argument on the command line, invokes
 `python <that script> --onefig-completions <prefix>`, and uses the
-output as the candidate list. Non-onefig scripts produce no candidates
+output as the candidate list. Non-onefig scripts produce no candidates,
 and the user falls back to the shell's default behavior.
+
+If your script is directly executable (a shebang plus `chmod +x`, or a
+console-script entry point), you can bind completion to its command name
+instead, which avoids re-walking the command line on every TAB:
+
+```bash
+onefig install-completion bash --prog train.py >> ~/.bashrc
+source ~/.bashrc
+
+./train.py opt<TAB>          # → optimizer.kind=  optimizer.lr=  ...
+```
+
+Both helpers also accept `zsh` and `fish` as the target shell.
+
+The same install snippets are also available as flags on any onefig
+script (``--onefig-install-python-completion <shell>`` and
+``--onefig-install-completion <shell>``), which is useful when the
+``onefig`` command isn't on the user's ``$PATH`` (e.g. inside an
+application virtualenv).
 
 ### CLI overrides without argparse
 
@@ -339,8 +334,9 @@ print(cfg.epochs)          # reads always work
 - **Schema-aware `--help`** — `python script.py --help` prints every
   overridable field with its type, default, current value, and docstring.
   `Literal` / `Enum` choices are surfaced inline.
-- **Shell tab completion** — install snippets for `bash`, `zsh`, and
-  `fish` complete every overridable key from the schema.
+- **Shell tab completion** — `onefig install-python-completion <shell>`
+  enables TAB completion of every overridable key for any onefig script
+  invoked via `python`. Supports `bash`, `zsh`, and `fish`.
 - **Leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` when the
   leaf name is unambiguous; conflicts raise with a clear message.
 - **Round-trip serialization** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
@@ -386,6 +382,13 @@ cfg.format_help()                            # same, returned as a string
 cfg.completion_candidates()                  # list of completion tokens
 cfg.shell_completion_script("bash")          # install snippet for the calling script
 cfg.python_wrapper_completion_script("bash") # install snippet for `python <script>.py`
+```
+
+The library installs a console command:
+
+```bash
+onefig install-python-completion <bash|zsh|fish>      # one-time, global
+onefig install-completion <bash|zsh|fish> --prog NAME # per-script
 ```
 
 ## Examples

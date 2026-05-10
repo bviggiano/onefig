@@ -45,6 +45,9 @@ Homepage = "https://github.com/bviggiano/onefig"
 Repository = "https://github.com/bviggiano/onefig"
 Issues = "https://github.com/bviggiano/onefig/issues"
 
+[project.scripts]
+onefig = "onefig._cli_entry:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/onefig"]
 
