@@ -68,19 +68,31 @@ def test_help_includes_attribute_docstrings() -> None:
     assert "Which optimizer to use." in out
 
 
-def test_short_description_inline_after_pipe() -> None:
-    """When everything fits, the description follows ``|`` on the head line."""
+def test_description_starts_on_a_new_indented_line() -> None:
+    """Description always begins on its own hang-indented line below the head."""
 
     class Tiny(ConfigModel):
         epochs: int = 10
         """Number of epochs."""
 
     out = format_help(Tiny())
-    assert "epochs : int  (default: 10  ·  current: 10)  |  Number of epochs." in out
+    lines = out.splitlines()
+    head_idx = next(
+        i
+        for i, line in enumerate(lines)
+        if "epochs : int" in line and "(default: 10" in line
+    )
+    next_line = lines[head_idx + 1]
+    inner = next_line.strip("│").rstrip()
+    leading_spaces = len(inner) - len(inner.lstrip(" "))
+    assert leading_spaces >= 6, next_line
+    assert "Number of epochs." in next_line
+    # The pipe separator is no longer used in the layout.
+    assert " | " not in lines[head_idx]
 
 
-def test_long_description_overflow_is_tab_indented() -> None:
-    """Description overflow continues on subsequent hang-indented lines."""
+def test_long_description_overflow_stays_tab_indented() -> None:
+    """Each continuation line of a wrapped description keeps the tab indent."""
 
     class Verbose(ConfigModel):
         x: int = 1
@@ -90,15 +102,17 @@ def test_long_description_overflow_is_tab_indented() -> None:
 
     out = format_help(Verbose())
     lines = out.splitlines()
-    # The first description fragment lives on the head line after ' | '.
-    head_idx = next(i for i, line in enumerate(lines) if " | " in line)
-    # Subsequent lines that carry description text should be hang-indented:
-    # 1 space (panel padding) + 2 (body indent) + 4 (hang) = 7 leading spaces
-    # inside the panel before any visible word.
-    after = lines[head_idx + 1]
-    inner = after.strip("│").rstrip()  # peel borders + trailing pad
-    leading_spaces = len(inner) - len(inner.lstrip(" "))
-    assert leading_spaces >= 6, after
+    head_idx = next(i for i, line in enumerate(lines) if "x : int" in line)
+    desc_lines = []
+    for line in lines[head_idx + 1 :]:
+        inner = line.strip("│").rstrip()
+        if not inner:
+            break
+        desc_lines.append(line)
+        leading = len(inner) - len(inner.lstrip(" "))
+        assert leading >= 6, line
+    # Verbose text should produce at least two wrapped description lines.
+    assert len(desc_lines) >= 2, desc_lines
 
 
 def test_field_description_takes_precedence_over_docstring() -> None:
