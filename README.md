@@ -114,17 +114,17 @@ $ python script.py --help
 │                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                      │
-│   epochs : int  (default: 10)                                                        │
-│       Number of epochs.                                                               │
+│   epochs : int = 10                                                                  │
+│       Number of epochs.                                                              │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 
 ╭─ optimizer ──────────────────────────────────────────────────────────────────────────╮
 │                                                                                      │
-│   kind : {'sgd', 'adam', 'adamw'}  (default: 'sgd')                                  │
+│   kind : Literal['sgd', 'adam', 'adamw'] = 'sgd'                                     │
 │       Which optimizer to use.                                                        │
 │                                                                                      │
-│   lr : float  (default: 0.0001)                                                      │
+│   lr : float = 0.0001                                                                │
 │       Learning rate.                                                                 │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
@@ -137,14 +137,16 @@ $ python script.py --help
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-Each entry's head sits on the first line (with metadata inline when it fits,
-on its own hang-indented line otherwise). The description always starts on a
-new tab-indented line below, and overflow continues at the same indent. The
-layout adapts to your terminal width.
+Each entry reads like a Python annotation: `<label> : <type> = <current value>`
+on the first line, the description hang-indented below, and a `(default: X)`
+footnote on its own indented line *only* when the current value differs from
+the declared default. Run with `lr=0.5` and the `lr` block becomes:
 
-The metadata is compact: `(default: X)` when the field still has its default
-value, `(default: X → Y)` when an override has changed it, and `(now: X)` for
-required fields that have no declared default.
+```text
+│   lr : float = 0.5                                                                   │
+│       Learning rate.                                                                 │
+│       (default: 0.0001)                                                              │
+```
 
 `Literal[...]` choices and `Enum` members are surfaced inline so users can
 discover valid values without grepping the schema. Field docstrings (PEP 257)

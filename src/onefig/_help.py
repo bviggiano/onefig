@@ -128,7 +128,8 @@ def _render_field_lines(
         if idx > 0:
             out.append("")
         type_str = _format_type(info.annotation)
-        meta_str = _format_meta(info, current)
+        current_str = _format_value(current)
+        default_str = _format_default(info)
 
         if name == full or not leaf_unique.get(name, False):
             label = full
@@ -136,55 +137,46 @@ def _render_field_lines(
             label = name
 
         out.extend(
-            _render_entry(label, type_str, meta_str, info.description, body_width)
+            _render_entry(
+                label,
+                type_str,
+                current_str,
+                default_str,
+                info.description,
+                body_width,
+            )
         )
     return [f"{_INDENT}{line}" if line else "" for line in out]
-
-
-def _format_meta(info: FieldInfo, current: Any) -> str:
-    """Render the meta block.
-
-    Three forms: ``(default: X)``, ``(default: X → Y)``, or ``(now: X)``.
-    """
-    current_str = repr(current)
-    default_str = _format_default(info)
-    if default_str is None:
-        return f"(now: {current_str})"
-    if default_str == current_str:
-        return f"(default: {default_str})"
-    return f"(default: {default_str} → {current_str})"
 
 
 def _render_entry(
     label: str,
     type_str: str,
-    meta_str: str,
+    current_str: str,
+    default_str: str | None,
     description: str | None,
     body_width: int,
 ) -> list[str]:
     """Lay out one field entry.
 
-    Head sits on the first line (with metadata inline when it fits, on its
-    own hang-indented line otherwise). The description always starts on a
-    new line, hang-indented, and overflow continues at the same indent.
+    Head reads like a Python annotation: ``<label> : <type> = <current>``.
+    Description sits on a hang-indented line below; when ``default`` is set
+    and differs from ``current``, it follows on its own hang-indented line
+    after the description as ``(default: X)``.
     """
     cont_width = max(20, body_width - len(_HANG))
 
-    head_full = f"{label} : {type_str}  {meta_str}"
-    head_short = f"{label} : {type_str}"
-
-    if len(head_full) <= body_width:
-        out = [head_full]
-    elif len(head_short) <= body_width:
-        out = [head_short, f"{_HANG}{meta_str}"]
+    head = f"{label} : {type_str} = {current_str}"
+    if len(head) <= body_width:
+        out = [head]
     else:
         out = textwrap.wrap(
-            head_full,
+            head,
             width=body_width,
             subsequent_indent=_HANG,
             break_long_words=False,
             break_on_hyphens=False,
-        ) or [head_full]
+        ) or [head]
 
     if description:
         desc = " ".join(description.splitlines()).strip()
@@ -197,7 +189,22 @@ def _render_entry(
             )
             out.extend(f"{_HANG}{cl}" for cl in desc_lines)
 
+    if default_str is not None and default_str != current_str:
+        out.append(f"{_HANG}(default: {default_str})")
+
     return out
+
+
+def _format_value(value: Any) -> str:
+    """Render a config value for display.
+
+    Enums are rendered as their underlying value (matching what the user
+    would type as a CLI override) instead of Python's ``<Enum.MEMBER: ...>``
+    form.
+    """
+    if isinstance(value, enum.Enum):
+        return repr(value.value)
+    return repr(value)
 
 
 def _render_panel(title: str, sections: Sequence[Sequence[str]], width: int) -> str:
@@ -248,7 +255,7 @@ def _format_default(info: FieldInfo) -> str | None:
             return "<factory>"
     else:
         value = info.default
-    return repr(value)
+    return _format_value(value)
 
 
 def _format_type(annotation: Any) -> str:
@@ -259,11 +266,11 @@ def _format_type(annotation: Any) -> str:
     args = get_args(annotation)
 
     if origin is Literal:
-        return "{" + ", ".join(repr(a) for a in args) + "}"
+        return "Literal[" + ", ".join(repr(a) for a in args) + "]"
 
     if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
         members = ", ".join(repr(m.value) for m in annotation)
-        return f"{annotation.__name__}{{{members}}}"
+        return f"{annotation.__name__}[{members}]"
 
     if origin is Union or (UnionType is not None and origin is UnionType):
         return " | ".join(_format_type(a) for a in args)
