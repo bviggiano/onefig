@@ -138,14 +138,14 @@ $ python script.py --help
 ```
 
 Each entry reads like a Python annotation: `<label> : <type> = <current value>`
-on the first line, the description hang-indented below, and a `(default: X)`
-footnote on its own indented line *only* when the current value differs from
-the declared default. Run with `lr=0.5` and the `lr` block becomes:
+on the first line, with the description hang-indented below. When the current
+value differs from the declared default, `(default: X)` is appended to the
+description (it wraps to the next indented line if it overflows). Run with
+`lr=0.5` and the `lr` block becomes:
 
 ```text
 │   lr : float = 0.5                                                                   │
-│       Learning rate.                                                                 │
-│       (default: 0.0001)                                                              │
+│       Learning rate. (default: 0.0001)                                               │
 ```
 
 `Literal[...]` choices and `Enum` members are surfaced inline so users can

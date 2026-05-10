@@ -178,19 +178,19 @@ def _render_entry(
             break_on_hyphens=False,
         ) or [head]
 
-    if description:
-        desc = " ".join(description.splitlines()).strip()
-        if desc:
-            desc_lines = textwrap.wrap(
-                desc,
-                width=cont_width,
-                break_long_words=False,
-                break_on_hyphens=False,
-            )
-            out.extend(f"{_HANG}{cl}" for cl in desc_lines)
-
+    desc = " ".join(description.splitlines()).strip() if description else ""
     if default_str is not None and default_str != current_str:
-        out.append(f"{_HANG}(default: {default_str})")
+        footnote = f"(default: {default_str})"
+        desc = f"{desc} {footnote}" if desc else footnote
+
+    if desc:
+        desc_lines = textwrap.wrap(
+            desc,
+            width=cont_width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        out.extend(f"{_HANG}{cl}" for cl in desc_lines)
 
     return out
 
