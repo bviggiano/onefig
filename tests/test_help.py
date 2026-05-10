@@ -68,6 +68,39 @@ def test_help_includes_attribute_docstrings() -> None:
     assert "Which optimizer to use." in out
 
 
+def test_short_description_inline_after_pipe() -> None:
+    """When everything fits, the description follows ``|`` on the head line."""
+
+    class Tiny(ConfigModel):
+        epochs: int = 10
+        """Number of epochs."""
+
+    out = format_help(Tiny())
+    assert "epochs : int  (default: 10  ·  current: 10)  |  Number of epochs." in out
+
+
+def test_long_description_overflow_is_tab_indented() -> None:
+    """Description overflow continues on subsequent hang-indented lines."""
+
+    class Verbose(ConfigModel):
+        x: int = 1
+        """A very long description that goes on and on with many words deliberately
+        to force textwrap into producing more than one continuation line so we can
+        verify the tab indent behavior on the second and third lines too."""
+
+    out = format_help(Verbose())
+    lines = out.splitlines()
+    # The first description fragment lives on the head line after ' | '.
+    head_idx = next(i for i, line in enumerate(lines) if " | " in line)
+    # Subsequent lines that carry description text should be hang-indented:
+    # 1 space (panel padding) + 2 (body indent) + 4 (hang) = 7 leading spaces
+    # inside the panel before any visible word.
+    after = lines[head_idx + 1]
+    inner = after.strip("│").rstrip()  # peel borders + trailing pad
+    leading_spaces = len(inner) - len(inner.lstrip(" "))
+    assert leading_spaces >= 6, after
+
+
 def test_field_description_takes_precedence_over_docstring() -> None:
     out = format_help(_Cfg())
     assert "Explicit field description." in out
