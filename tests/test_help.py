@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Literal
+from typing import Literal, Optional
 
 import pytest
 from pydantic import Field
@@ -29,7 +29,7 @@ class _Cfg(ConfigModel):
     loss: _Loss = _Loss.CE
     """Loss function."""
     tags: list[str] = []
-    name: str | None = None
+    name: Optional[str] = None  # noqa: UP045 — pydantic evaluates this on py3.9
     explicit: int = Field(default=7, description="Explicit field description.")
     """This docstring should be ignored in favor of the explicit description."""
 

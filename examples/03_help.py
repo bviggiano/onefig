@@ -15,7 +15,7 @@ present (see ``explicit`` below).
 from __future__ import annotations
 
 import enum
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field
 
@@ -50,7 +50,8 @@ class TrainCfg(ConfigModel):
     """Training loss function."""
     model: ModelCfg = ModelCfg()
     optimizer: OptimizerCfg = OptimizerCfg()
-    checkpoint: str | None = None
+    # Optional[...] (not X | None) for Pydantic runtime eval on Python 3.9.
+    checkpoint: Optional[str] = None  # noqa: UP045
     """Path to a checkpoint to resume from."""
     explicit: int = Field(default=7, description="Set via Field(description=...).")
     """This docstring is shadowed by the explicit Field description."""
