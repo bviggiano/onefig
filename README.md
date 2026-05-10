@@ -11,19 +11,15 @@ pip install onefig
 ```
 ![hero.png](hero.png)
 
+A simple, typed YAML config system for Python that tries to unite the best aspects of various config libaries into one API.
+
 > **One config to rule them all!**
 
-A simple, typed YAML config system for Python. Built on
-[OmegaConf](https://omegaconf.readthedocs.io/) (loading + interpolation) and
-[Pydantic v2](https://docs.pydantic.dev/) (typing + validation).
+## Why?
 
-## Why
+Configuration management is at the heart of most ML workflows, but can be wildly [annoying](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/configurator.py#L12-L14) to deal with. This repo is a simple pythonic config management system that tries to tie in the best aspects of [OmegaConf](https://omegaconf.readthedocs.io/) (flexible YAML loading and interpolation) and [Pydantic v2](https://docs.pydantic.dev/) (strict typing and validation), in a simple API. I took heavy inspiration from [Hydra](https://github.com/facebookresearch/hydra), [Pydra](https://github.com/jordan-benjamin/pydra), and [tyro](https://github.com/brentyi/tyro).
 
-Hydra-style configs are powerful but heavyweight. Hand-rolled config classes are
-brittle. onefig is the small, sharp middle: write a Pydantic schema, load YAML,
-override from CLI, freeze it, and run.
-
-> *"All we have to decide is what to do with the time that is given us."*
+`onefig` was built for my own projects, but figured others might find it useful too. Contributions and suggestions are welcome!
 
 ## Quickstart
 
@@ -78,9 +74,62 @@ python script.py                          # uses YAML defaults
 python script.py lr=0.001 epochs=20       # CLI overrides
 python script.py model.name=bert-base     # dotted-path override
 python script.py lr=0.001 --show          # print resolved config and exit
+python script.py --help                   # list every overridable field
 ```
 
 ## Common patterns
+
+> *"All we have to decide is what to do with the time that is given us."*
+
+### Schema-aware `--help`
+
+`update_from_cli` intercepts `--help` / `-h` and prints every overridable
+field (with its type, default, current value, and docstring) before exiting.
+No argparse, no manual help string to maintain; the schema is the docs:
+
+```python
+from typing import Literal
+
+class OptCfg(ConfigModel):
+    kind: Literal["sgd", "adam", "adamw"] = "sgd"
+    """Which optimizer to use."""
+    lr: float = 1e-4
+    """Learning rate."""
+
+class TrainCfg(ConfigModel):
+    epochs: int = 10
+    """Number of epochs."""
+    optimizer: OptCfg = OptCfg()
+```
+
+```text
+$ python script.py --help
+train
+
+Override fields with key=value (or use --show / --help).
+
+Fields:
+  epochs : int  (default: 10, current: 10)
+      Number of epochs.
+
+  optimizer.kind : {'sgd', 'adam', 'adamw'}  (default: 'sgd', current: 'sgd')
+      Which optimizer to use.
+
+  optimizer.lr : float  (default: 0.0001, current: 0.0001)
+      Learning rate.
+
+Special flags:
+  --show         Print the resolved config and exit.
+  --help, -h     Show this help and exit.
+```
+
+`Literal[...]` choices and `Enum` members are surfaced inline so users can
+discover valid values without grepping the schema. Field docstrings (PEP 257)
+populate the descriptions automatically; an explicit
+`Field(description=...)` takes precedence if you'd rather decouple the doc
+from the source. Print the same block manually with `cfg.print_help()` (or
+get the string via `cfg.format_help()`); useful when wiring help into your
+own argparse setup.
 
 ### CLI overrides without argparse
 
@@ -212,6 +261,9 @@ print(cfg.epochs)          # reads always work
   unknown fields rejected (`extra="forbid"`).
 - **Two CLI override paths** — argparse-free `update_from_cli` for quick
   scripts, or `update_from_args` for custom argparse setups.
+- **Schema-aware `--help`** — `python script.py --help` prints every
+  overridable field with its type, default, current value, and docstring.
+  `Literal` / `Enum` choices are surfaced inline.
 - **Smart leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` if it's
   unambiguous. Conflicts raise with a clear message.
 - **Round-trippable** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
@@ -250,7 +302,16 @@ cfg.save_yaml("snapshot.yaml")              # write YAML to disk
 
 # Display
 cfg.display(name="MyRun")                    # print ASCII tree to stdout
+cfg.print_help()                             # schema-aware help (also via --help)
+cfg.format_help()                            # same, returned as a string
 ```
+
+## Examples
+
+Runnable demos live in [`examples/`](examples/) — one Python script per
+feature plus a guided notebook. Start with
+[`examples/01_basic.py`](examples/01_basic.py) and see
+[`examples/README.md`](examples/README.md) for the full menu.
 
 ## License
 

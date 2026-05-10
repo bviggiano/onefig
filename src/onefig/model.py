@@ -12,6 +12,7 @@ from typing_extensions import Self
 from onefig._cli import parse_overrides
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
+from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
 from onefig._overrides import _resolve_keys, _set_dotted, apply_overrides
 
@@ -31,6 +32,7 @@ class ConfigModel(BaseModel):
     model_config = ConfigDict(
         validate_assignment=True,
         extra="forbid",
+        use_attribute_docstrings=True,
     )
 
     _frozen: bool = PrivateAttr(default=False)
@@ -191,6 +193,7 @@ class ConfigModel(BaseModel):
         *,
         strict: bool = True,
         exit_on_show: bool = True,
+        exit_on_help: bool = True,
     ) -> None:
         """Apply ``key=value`` overrides parsed directly from CLI tokens.
 
@@ -208,8 +211,12 @@ class ConfigModel(BaseModel):
         name or a full dotted path. Values are best-effort JSON-coerced
         (numbers, bools, ``null``, lists, dicts) and fall back to strings.
 
-        If a bare ``--show`` token is present, the resolved config is printed
-        and (when ``exit_on_show``) the program exits with status 0.
+        Special tokens (consumed before override parsing):
+          * ``--help`` / ``-h`` — print a schema-aware listing of every
+            overridable field (type, default, current value, docstring) and
+            exit. Short-circuits override application.
+          * ``--show`` — apply overrides, then print the resolved config and
+            exit.
 
         Args:
             args: List of CLI tokens. Defaults to ``sys.argv[1:]``.
@@ -217,18 +224,28 @@ class ConfigModel(BaseModel):
             exit_on_show: If ``True`` (default), ``--show`` triggers
                 :func:`sys.exit` after printing. Set to ``False`` to keep
                 the call returning normally (useful in tests).
+            exit_on_help: If ``True`` (default), ``--help`` / ``-h``
+                triggers :func:`sys.exit` after printing. Set to ``False``
+                to keep the call returning normally (useful in tests).
 
         Raises:
             ValueError: For malformed tokens, ambiguous leaf keys, or (when
                 ``strict``) unknown keys.
             pydantic.ValidationError: If a value fails type validation at
                 the destination field.
-            SystemExit: If ``--show`` was passed and ``exit_on_show`` is
-                ``True``.
+            SystemExit: If ``--show`` or ``--help`` / ``-h`` was passed and
+                the corresponding ``exit_on_*`` flag is ``True``.
         """
         if args is None:
             args = sys.argv[1:]
         tokens = list(args)
+
+        if "--help" in tokens or "-h" in tokens:
+            self.print_help()
+            if exit_on_help:
+                sys.exit(0)
+            return
+
         show_requested = "--show" in tokens
         tokens = [t for t in tokens if t != "--show"]
 
@@ -239,6 +256,27 @@ class ConfigModel(BaseModel):
             self.display()
             if exit_on_show:
                 sys.exit(0)
+
+    def format_help(self, title: str | None = None) -> str:
+        """Render this config's schema as a help string.
+
+        Lists every overridable field with its dotted path, type, default,
+        current value, and docstring (if any). Useful for argparse-driven
+        scripts that want to surface the same information as the
+        ``--help`` flag handled by :meth:`update_from_cli`.
+
+        Args:
+            title: Header for the output. Defaults to
+                :attr:`config_name` (if set) or the class name.
+
+        Returns:
+            A multi-line help string ready to print.
+        """
+        return format_help(self, title=title or self._config_name)
+
+    def print_help(self, title: str | None = None) -> None:
+        """Print :meth:`format_help` to stdout."""
+        print(self.format_help(title=title))
 
     def to_dict(self) -> dict[str, Any]:
         """Dump this config to a nested ``dict``.

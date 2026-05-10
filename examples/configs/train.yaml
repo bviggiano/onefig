@@ -1,0 +1,14 @@
+# Sample config used by examples/01_basic.py and examples/02_cli_overrides.py.
+run_name: ${model.name}-ep${epochs}
+epochs: 5
+model:
+  name: tiny-bert
+  hidden_size: 256
+  num_layers: 6
+optimizer:
+  kind: adamw
+  lr: 0.0005
+  weight_decay: 0.01
+tags:
+  - baseline
+  - smoke-test
