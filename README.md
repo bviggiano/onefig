@@ -180,10 +180,31 @@ with `=`), every unambiguous leaf-name shortcut, and the special flags
 `--show`, `--help`, `-h`. Ambiguous leaves are deliberately omitted so
 users aren't offered a shortcut the override engine would refuse.
 
-The script must be directly executable (e.g. `chmod +x train.py` with a
-shebang line, or installed via a console-script entry point) for the
-shell to bind completion to the command name. `python script.py` form
-is not supported by the shell-completion mechanism.
+The shell binds completion to the command name (e.g. `train.py`), so the
+snippet above only fires when the script is invoked directly. To get
+completion for the more common `python script.py` form, install a
+generic wrapper that hooks completion onto `python` and `python3`:
+
+```bash
+# One-time install. Source for the current session...
+source <(./train.py --onefig-install-python-completion bash)
+
+# ...or persist for future sessions.
+./train.py --onefig-install-python-completion bash >> ~/.bashrc
+```
+
+After this, every onefig-based script invoked via `python` gets
+completion automatically:
+
+```bash
+python train.py opt<TAB>          # → optimizer.kind=  optimizer.lr=  ...
+python any_other_onefig_script.py l<TAB>  # → lr=
+```
+
+The wrapper finds the first `.py` argument on the command line, calls
+`python <that script> --onefig-completions <prefix>`, and uses the
+output as the candidate list. Non-onefig scripts produce no candidates
+and the user falls back to the shell's default behavior.
 
 ### CLI overrides without argparse
 
@@ -363,7 +384,8 @@ cfg.format_help()                            # same, returned as a string
 
 # Shell completion
 cfg.completion_candidates()                  # list of completion tokens
-cfg.shell_completion_script("bash")          # install snippet (bash | zsh | fish)
+cfg.shell_completion_script("bash")          # install snippet for the calling script
+cfg.python_wrapper_completion_script("bash") # install snippet for `python <script>.py`
 ```
 
 ## Examples

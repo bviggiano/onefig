@@ -119,3 +119,141 @@ function {func}
 end
 complete -c {prog} -f -a '({func})'
 """
+
+
+def python_completion_script(shell: str) -> str:
+    """Render an install snippet for ``python <script>.py`` tab completion.
+
+    Bound to ``python`` / ``python3`` (and friends), the generated function
+    walks the current command line to find the script arg, then invokes
+    ``<python> <script> --onefig-completions <prefix>`` and uses the output
+    as the candidate list. Falls back to file completion while the user is
+    still typing the script path; falls back to no completions when the
+    script isn't an onefig script (or errors).
+
+    One-time install. Sourcing the snippet enables completion for every
+    onefig-based script invoked via ``python``, regardless of whether the
+    script is on ``$PATH`` or directly executable.
+
+    Args:
+        shell: One of ``"bash"``, ``"zsh"``, ``"fish"``.
+
+    Returns:
+        A shell snippet ready to write to a file or eval.
+
+    Raises:
+        ValueError: If ``shell`` isn't one of the supported shells.
+    """
+    if shell == "bash":
+        return _python_bash_script()
+    if shell == "zsh":
+        return _python_zsh_script()
+    if shell == "fish":
+        return _python_fish_script()
+    raise ValueError(f"Unsupported shell {shell!r}; expected one of: bash, zsh, fish.")
+
+
+_PYTHON_NAMES = (
+    "python",
+    "python3",
+    "python3.9",
+    "python3.10",
+    "python3.11",
+    "python3.12",
+    "python3.13",
+)
+
+
+def _python_bash_script() -> str:
+    targets = " ".join(_PYTHON_NAMES)
+    return f"""\
+_onefig_python_complete() {{
+    local cur script i
+    cur="${{COMP_WORDS[COMP_CWORD]}}"
+    script=""
+    for ((i=1; i<COMP_CWORD; i++)); do
+        case "${{COMP_WORDS[i]}}" in
+            -*) ;;
+            *.py)
+                if [[ -f "${{COMP_WORDS[i]}}" ]]; then
+                    script="${{COMP_WORDS[i]}}"
+                    break
+                fi
+                ;;
+        esac
+    done
+    if [[ -z "$script" ]]; then
+        COMPREPLY=( $(compgen -f -- "$cur") )
+        return
+    fi
+    local IFS=$'\\n'
+    local candidates
+    candidates=$("${{COMP_WORDS[0]}}" "$script" --onefig-completions "$cur" 2>/dev/null)
+    if [[ -z "$candidates" ]]; then
+        return
+    fi
+    COMPREPLY=( $(compgen -W "$candidates" -- "$cur") )
+}}
+complete -o nospace -F _onefig_python_complete {targets}
+"""
+
+
+def _python_zsh_script() -> str:
+    targets = " ".join(_PYTHON_NAMES)
+    cand_expr = (
+        '("${(@f)$($python_cmd "$script" '
+        '--onefig-completions "$PREFIX" 2>/dev/null)}")'
+    )
+    return f"""\
+#compdef {targets}
+_onefig_python_complete() {{
+    local script python_cmd i
+    python_cmd="${{words[1]}}"
+    script=""
+    for ((i=2; i<CURRENT; i++)); do
+        case "${{words[i]}}" in
+            -*) ;;
+            *.py)
+                if [[ -f "${{words[i]}}" ]]; then
+                    script="${{words[i]}}"
+                    break
+                fi
+                ;;
+        esac
+    done
+    if [[ -z "$script" ]]; then
+        _files
+        return
+    fi
+    local -a candidates
+    candidates={cand_expr}
+    [[ ${{#candidates[@]}} -gt 0 ]] && compadd -S '' -- $candidates
+}}
+_onefig_python_complete "$@"
+"""
+
+
+def _python_fish_script() -> str:
+    cmds = " ".join(f"-c {n}" for n in _PYTHON_NAMES)
+    return f"""\
+function __onefig_python_complete
+    set -l tokens (commandline -opc)
+    set -l cur (commandline -t)
+    set -l script ""
+    for tok in $tokens[2..]
+        if string match -q -- '-*' $tok
+            continue
+        end
+        if string match -q -- '*.py' $tok; and test -f "$tok"
+            set script $tok
+            break
+        end
+    end
+    if test -z "$script"
+        __fish_complete_path "$cur"
+        return
+    end
+    $tokens[1] "$script" --onefig-completions "$cur" 2>/dev/null
+end
+complete {cmds} -f -a '(__onefig_python_complete)'
+"""

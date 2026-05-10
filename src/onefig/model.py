@@ -10,7 +10,11 @@ from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 from typing_extensions import Self
 
 from onefig._cli import parse_overrides
-from onefig._completion import completion_candidates, shell_script
+from onefig._completion import (
+    completion_candidates,
+    python_completion_script,
+    shell_script,
+)
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
@@ -221,6 +225,10 @@ class ConfigModel(BaseModel):
             exit.
           * ``--onefig-install-completion <bash|zsh|fish>`` — print a shell
             completion install snippet for the calling script and exit.
+          * ``--onefig-install-python-completion <bash|zsh|fish>`` — print a
+            generic shell snippet that enables tab completion for every
+            onefig-based script invoked via ``python <script>.py``. One-time
+            install per shell.
           * ``--onefig-completions [PARTIAL]`` — emit one tab-completion
             candidate per line (filtered by ``PARTIAL`` if present). Used
             internally by the installed shell scripts; rarely typed by hand.
@@ -255,6 +263,14 @@ class ConfigModel(BaseModel):
             idx = tokens.index("--onefig-install-completion")
             shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
             print(self.shell_completion_script(shell))
+            if exit_on_completion:
+                sys.exit(0)
+            return
+
+        if "--onefig-install-python-completion" in tokens:
+            idx = tokens.index("--onefig-install-python-completion")
+            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+            print(self.python_wrapper_completion_script(shell))
             if exit_on_completion:
                 sys.exit(0)
             return
@@ -322,6 +338,32 @@ class ConfigModel(BaseModel):
             A flat list of completion strings, in stable insertion order.
         """
         return completion_candidates(self)
+
+    def python_wrapper_completion_script(self, shell: str) -> str:
+        """Render a shell snippet that enables ``python <script>.py`` completion.
+
+        Unlike :meth:`shell_completion_script`, which binds completion to
+        the calling script's name, this script binds completion to the
+        ``python`` / ``python3`` commands themselves. After installing it
+        once, every onefig-based script invoked via ``python script.py``
+        gets tab completion automatically.
+
+        Internally, the generated function walks the command line to find
+        the script argument, then invokes ``<python> <script>
+        --onefig-completions <prefix>`` and uses the output as candidates.
+        Non-onefig scripts produce no candidates and the user sees the
+        shell's default behavior.
+
+        Args:
+            shell: One of ``"bash"``, ``"zsh"``, ``"fish"``.
+
+        Returns:
+            A shell snippet ready to write to a file or eval.
+
+        Raises:
+            ValueError: If ``shell`` isn't one of the supported shells.
+        """
+        return python_completion_script(shell)
 
     def shell_completion_script(self, shell: str, *, prog: str | None = None) -> str:
         """Render a shell-completion install snippet for the calling script.
