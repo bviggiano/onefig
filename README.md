@@ -85,7 +85,10 @@ python script.py --help                   # list every overridable field
 
 `update_from_cli` intercepts `--help` / `-h` and prints every overridable
 field (with its type, default, current value, and docstring) before exiting.
-No argparse, no manual help string to maintain; the schema is the docs:
+No argparse, no manual help string to maintain; the schema is the docs.
+Each nested `ConfigModel` gets its own boxed sub-panel, and unambiguous
+leaf names are shown alongside their full dotted path so the CLI shortcut
+is discoverable:
 
 ```python
 from typing import Literal
@@ -114,19 +117,24 @@ $ python script.py --help
 │       (default: 10  ·  current: 10)                                                  │
 │       Number of epochs.                                                              │
 │                                                                                      │
-│   optimizer.kind : {'sgd', 'adam', 'adamw'}                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─ optimizer ──────────────────────────────────────────────────────────────────────────╮
+│                                                                                      │
+│   kind (optimizer.kind) : {'sgd', 'adam', 'adamw'}                                   │
 │       (default: 'sgd'  ·  current: 'sgd')                                            │
 │       Which optimizer to use.                                                        │
 │                                                                                      │
-│   optimizer.lr : float                                                               │
+│   lr (optimizer.lr) : float                                                          │
 │       (default: 0.0001  ·  current: 0.0001)                                          │
 │       Learning rate.                                                                 │
 │                                                                                      │
-├──────────────────────────────────────────────────────────────────────────────────────┤
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─ flags ──────────────────────────────────────────────────────────────────────────────╮
 │                                                                                      │
-│ Special flags:                                                                       │
-│   --show         Print the resolved config and exit.                                 │
-│   --help, -h     Show this help and exit.                                            │
+│ --show         Print the resolved config and exit.                                   │
+│ --help, -h     Show this help and exit.                                              │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```

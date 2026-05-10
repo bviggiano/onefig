@@ -9,6 +9,8 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
+from onefig._overrides import _resolve_keys
+
 try:
     from types import UnionType  # Python 3.10+
 except ImportError:  # pragma: no cover
@@ -17,19 +19,25 @@ except ImportError:  # pragma: no cover
 _MIN_WIDTH = 60
 _MAX_WIDTH = 100
 _INDENT = "  "
+_HANG = "    "
 _META_SEP = "  ·  "
+
+# (local_name, full_path, info, current_value)
+FieldEntry = tuple[str, str, FieldInfo, Any]
 
 
 def format_help(model: BaseModel, title: str | None = None) -> str:
-    """Render a schema-aware help panel for a :class:`ConfigModel` instance.
+    """Render a schema-aware help block for a :class:`ConfigModel` instance.
 
-    Walks the model recursively and produces a tyro-style boxed panel
-    showing each leaf field's dotted path, type, default, current value,
-    and docstring/description.
+    Each nested :class:`ConfigModel` becomes its own boxed sub-panel titled
+    by its dotted path; the top panel lists scalar fields directly on the
+    model. When a leaf field name is unambiguous as a CLI override, it is
+    shown as ``<leaf> (<full.path>)``; otherwise the full dotted path is
+    shown alone.
 
     Args:
         model: A Pydantic model instance to introspect.
-        title: Header for the panel. Defaults to the model class name.
+        title: Header for the top panel. Defaults to the model class name.
 
     Returns:
         A multi-line string ready to print.
@@ -38,24 +46,36 @@ def format_help(model: BaseModel, title: str | None = None) -> str:
     width = _resolve_width()
     text_width = width - 4  # exclude '│ ' on the left and ' │' on the right
 
+    groups = _collect_groups(model)
+    leaf_unique = _leaf_uniqueness(model)
+
+    panels: list[str] = []
+
     intro = textwrap.wrap(
         "Override fields with key=value (or use --show / --help).",
         width=text_width,
     )
 
-    field_section = _build_field_lines(model, text_width)
+    top_path, top_fields = groups[0]
+    top_lines = _render_field_lines(top_fields, leaf_unique, text_width)
+    top_sections: list[Sequence[str]] = [intro]
+    if top_lines:
+        top_sections.append(top_lines)
+    panels.append(_render_panel(header, sections=top_sections, width=width))
 
-    flags_section = [
-        "Special flags:",
-        f"{_INDENT}--show         Print the resolved config and exit.",
-        f"{_INDENT}--help, -h     Show this help and exit.",
+    for path, fields in groups[1:]:
+        if not fields:
+            continue
+        section = _render_field_lines(fields, leaf_unique, text_width)
+        panels.append(_render_panel(path, sections=[section], width=width))
+
+    flags = [
+        "--show         Print the resolved config and exit.",
+        "--help, -h     Show this help and exit.",
     ]
+    panels.append(_render_panel("flags", sections=[flags], width=width))
 
-    return _render_panel(
-        header,
-        sections=[intro, field_section, flags_section],
-        width=width,
-    )
+    return "\n\n".join(panels)
 
 
 def _resolve_width() -> int:
@@ -63,14 +83,49 @@ def _resolve_width() -> int:
     return max(_MIN_WIDTH, min(term, _MAX_WIDTH))
 
 
-def _build_field_lines(model: BaseModel, text_width: int) -> list[str]:
-    entries = list(_iter_fields(model))
-    if not entries:
-        return ["(no fields)"]
+def _collect_groups(model: BaseModel) -> list[tuple[str, list[FieldEntry]]]:
+    """Walk the model and return (panel_title, [field entries]) in declaration order.
 
+    The first group has an empty title and contains the top-level scalar
+    fields; subsequent groups are nested ``ConfigModel`` sub-trees keyed by
+    their dotted path.
+    """
+    groups: list[tuple[str, list[FieldEntry]]] = []
+    _walk(model, prefix="", groups=groups)
+    return groups
+
+
+def _walk(
+    model: BaseModel, prefix: str, groups: list[tuple[str, list[FieldEntry]]]
+) -> None:
+    local: list[FieldEntry] = []
+    nested: list[tuple[str, BaseModel]] = []
+    for name, info in type(model).model_fields.items():
+        full = f"{prefix}{name}"
+        value = getattr(model, name)
+        if isinstance(value, BaseModel):
+            nested.append((full, value))
+        else:
+            local.append((name, full, info, value))
+    groups.append((prefix.rstrip("."), local))
+    for full, child in nested:
+        _walk(child, full + ".", groups)
+
+
+def _leaf_uniqueness(model: BaseModel) -> dict[str, bool]:
+    """Map every leaf name to whether it resolves uniquely as a CLI shortcut."""
+    candidates = _resolve_keys(model)
+    return {key: len(paths) == 1 for key, paths in candidates.items()}
+
+
+def _render_field_lines(
+    fields: Sequence[FieldEntry],
+    leaf_unique: dict[str, bool],
+    text_width: int,
+) -> list[str]:
     body_width = max(20, text_width - len(_INDENT))
     out: list[str] = []
-    for idx, (path, info, current) in enumerate(entries):
+    for idx, (name, full, info, current) in enumerate(fields):
         if idx > 0:
             out.append("")
         type_str = _format_type(info.annotation)
@@ -80,17 +135,25 @@ def _build_field_lines(model: BaseModel, text_width: int) -> list[str]:
             meta_parts.append(f"default: {default_str}")
         meta_parts.append(f"current: {current!r}")
 
-        out.extend(_wrap_with_indent(f"{path} : {type_str}", body_width, hang="    "))
+        if name == full or not leaf_unique.get(name, False):
+            head = f"{full} : {type_str}"
+        else:
+            head = f"{name} ({full}) : {type_str}"
+
+        out.extend(_wrap_with_indent(head, body_width, hang=_HANG))
         out.extend(
             _wrap_with_indent(
-                f"({_META_SEP.join(meta_parts)})", body_width, hang="    ", lead="    "
+                f"({_META_SEP.join(meta_parts)})",
+                body_width,
+                hang=_HANG,
+                lead=_HANG,
             )
         )
         if info.description:
             for raw in info.description.splitlines():
                 out.extend(
-                    _wrap_with_indent(raw, body_width, hang="    ", lead="    ")
-                    or ["    "]
+                    _wrap_with_indent(raw, body_width, hang=_HANG, lead=_HANG)
+                    or [_HANG]
                 )
     return [f"{_INDENT}{line}" if line else "" for line in out]
 
@@ -117,7 +180,6 @@ def _render_panel(title: str, sections: Sequence[Sequence[str]], width: int) -> 
     title_str = f" {title} "
     dashes = inner - 1 - len(title_str)
     if dashes < 1:
-        # Title too long for the chosen width; degrade gracefully.
         out_lines = ["╭" + "─" * inner + "╮", _pad(title.center(text_width), width)]
     else:
         out_lines = ["╭─" + title_str + "─" * dashes + "╮"]
@@ -146,20 +208,6 @@ def _truncate(line: str, width: int) -> str:
     if width <= 1:
         return line[:width]
     return line[: width - 1] + "…"
-
-
-def _iter_fields(
-    model: BaseModel, prefix: str = ""
-) -> list[tuple[str, FieldInfo, Any]]:
-    out: list[tuple[str, FieldInfo, Any]] = []
-    for name, info in type(model).model_fields.items():
-        full = f"{prefix}{name}"
-        value = getattr(model, name)
-        if isinstance(value, BaseModel):
-            out.extend(_iter_fields(value, full + "."))
-        else:
-            out.append((full, info, value))
-    return out
 
 
 def _format_default(info: FieldInfo) -> str | None:

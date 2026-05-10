@@ -97,21 +97,60 @@ def test_help_title_override() -> None:
     assert "MyExperiment" in out.splitlines()[0]
 
 
-def test_help_renders_a_panel_with_rounded_corners() -> None:
+def test_help_renders_panels_with_rounded_corners() -> None:
     out = format_help(_Cfg()).splitlines()
     assert out[0].startswith("╭") and out[0].endswith("╮")
     assert out[-1].startswith("╰") and out[-1].endswith("╯")
-    # All body lines are bordered with │ on both ends.
+    # Non-empty body lines are bordered with │ or ├ on both ends; empty
+    # lines are the blank separators between panels.
     body = out[1:-1]
-    assert all(
-        line.startswith(("│", "├")) and line.endswith(("│", "┤")) for line in body
-    ), body
+    for line in body:
+        if line == "":
+            continue
+        assert line.startswith(("│", "├", "╭", "╰")), line
+        assert line.endswith(("│", "┤", "╮", "╯")), line
 
 
-def test_help_panel_has_section_dividers() -> None:
+def test_nested_configs_render_as_their_own_panels() -> None:
     out = format_help(_Cfg())
-    # Three sections (intro, fields, flags) → two dividers.
-    assert out.count("├") == 2
+    # The top panel and the nested optimizer panel each get their own banner.
+    assert out.count("╭─ _Cfg ") == 1
+    assert out.count("╭─ optimizer ") == 1
+    assert out.count("╭─ flags ") == 1
+
+
+def test_unique_leaf_shows_with_full_path_in_parens() -> None:
+    out = format_help(_Cfg())
+    # 'kind' is unique to optimizer.kind.
+    assert "kind (optimizer.kind)" in out
+    # 'lr' is unique to optimizer.lr.
+    assert "lr (optimizer.lr)" in out
+
+
+def test_top_level_field_does_not_repeat_path() -> None:
+    out = format_help(_Cfg())
+    # Top-level 'epochs' shouldn't render as "epochs (epochs)".
+    assert "epochs (epochs)" not in out
+    assert "epochs : int" in out
+
+
+def test_ambiguous_leaf_shows_full_path_only() -> None:
+    class A(ConfigModel):
+        lr: float = 1e-4
+
+    class B(ConfigModel):
+        lr: float = 1e-3
+
+    class TwoOpt(ConfigModel):
+        a: A = A()
+        b: B = B()
+
+    out = format_help(TwoOpt())
+    # 'lr' is ambiguous (matches a.lr and b.lr), so no leaf shorthand.
+    assert "lr (a.lr)" not in out
+    assert "lr (b.lr)" not in out
+    assert "a.lr : float" in out
+    assert "b.lr : float" in out
 
 
 def test_help_lists_special_flags() -> None:
