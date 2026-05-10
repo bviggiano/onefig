@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from omegaconf import OmegaConf
-from pydantic import BaseModel, ConfigDict, PrivateAttr
+from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 from typing_extensions import Self
 
 from onefig._cli import parse_overrides
 from onefig._format import flatten, format_tree, unflatten
+from onefig._git import get_commit_hash
 from onefig._loader import load_yaml, resolve_path
 from onefig._overrides import _resolve_keys, _set_dotted, apply_overrides
 
@@ -34,6 +35,29 @@ class ConfigModel(BaseModel):
 
     _frozen: bool = PrivateAttr(default=False)
     _config_name: str | None = PrivateAttr(default=None)
+    _commit_hash: str | None = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def _capture_commit_hash(self) -> Self:
+        # Runs after every construction path (direct __init__, model_validate,
+        # load, from_dict, ...). Using a model_validator instead of
+        # model_post_init means subclasses can't silently bypass this by
+        # overriding model_post_init without super().
+        if self._commit_hash is None:
+            object.__setattr__(self, "_commit_hash", get_commit_hash())
+        return self
+
+    @property
+    def commit_hash(self) -> str | None:
+        """Git ``HEAD`` hash captured when this config was constructed.
+
+        Best-effort: ``None`` if ``git`` is unavailable, the working
+        directory isn't a repo, or capture otherwise failed.
+
+        Returns:
+            The 40-character commit hash, or ``None``.
+        """
+        return self._commit_hash
 
     @property
     def config_name(self) -> str | None:
@@ -59,7 +83,7 @@ class ConfigModel(BaseModel):
         cls,
         name_or_path: str | Path,
         *,
-        search_root: Path | None = None,
+        search_root: str | Path | None = None,
         config_name: str | None = None,
     ) -> Self:
         """Load and validate a config from a YAML file.
