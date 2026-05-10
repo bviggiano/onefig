@@ -37,8 +37,11 @@ class _Cfg(ConfigModel):
 def test_help_includes_field_paths() -> None:
     out = format_help(_Cfg())
     assert "epochs" in out
-    assert "optimizer.kind" in out
-    assert "optimizer.lr" in out
+    # Nested fields appear under their panel title with the leaf name only;
+    # the full dotted path is implied by the panel header + entry combo.
+    assert "╭─ optimizer " in out
+    assert "kind : " in out
+    assert "lr : float" in out
 
 
 def test_help_shows_default_and_current() -> None:
@@ -166,22 +169,24 @@ def test_nested_configs_render_as_their_own_panels() -> None:
     assert out.count("╭─ flags ") == 1
 
 
-def test_unique_leaf_shows_with_full_path_in_parens() -> None:
+def test_unique_leaf_shows_just_the_leaf_name() -> None:
     out = format_help(_Cfg())
-    # 'kind' is unique to optimizer.kind.
-    assert "kind (optimizer.kind)" in out
-    # 'lr' is unique to optimizer.lr.
-    assert "lr (optimizer.lr)" in out
+    # 'kind' is unique to optimizer.kind, so the entry shows only "kind".
+    # The panel title 'optimizer' already provides the parent context.
+    assert "kind : {'sgd', 'adam', 'adamw'}" in out
+    assert "lr : float" in out
+    # No annotated full-path suffix anywhere.
+    assert "(optimizer.kind)" not in out
+    assert "(optimizer.lr)" not in out
 
 
 def test_top_level_field_does_not_repeat_path() -> None:
     out = format_help(_Cfg())
-    # Top-level 'epochs' shouldn't render as "epochs (epochs)".
-    assert "epochs (epochs)" not in out
     assert "epochs : int" in out
+    assert "epochs (epochs)" not in out
 
 
-def test_ambiguous_leaf_shows_full_path_only() -> None:
+def test_ambiguous_leaf_shows_full_path() -> None:
     class A(ConfigModel):
         lr: float = 1e-4
 
@@ -193,11 +198,12 @@ def test_ambiguous_leaf_shows_full_path_only() -> None:
         b: B = B()
 
     out = format_help(TwoOpt())
-    # 'lr' is ambiguous (matches a.lr and b.lr), so no leaf shorthand.
-    assert "lr (a.lr)" not in out
-    assert "lr (b.lr)" not in out
+    # 'lr' is ambiguous (matches a.lr and b.lr), so each entry uses its
+    # full dotted path instead of the bare leaf.
     assert "a.lr : float" in out
     assert "b.lr : float" in out
+    assert "(a.lr)" not in out
+    assert "(b.lr)" not in out
 
 
 def test_help_lists_special_flags() -> None:
@@ -250,7 +256,8 @@ def test_help_flag_in_update_from_cli_exits(
     assert exc_info.value.code == 0
     out = capsys.readouterr().out
     assert "epochs" in out
-    assert "optimizer.kind" in out
+    assert "╭─ optimizer " in out
+    assert "kind : " in out
 
 
 def test_short_help_flag_in_update_from_cli_exits(
