@@ -20,7 +20,6 @@ _MIN_WIDTH = 60
 _MAX_WIDTH = 100
 _INDENT = "  "
 _HANG = "    "
-_META_SEP = "  ·  "
 
 # (local_name, full_path, info, current_value)
 FieldEntry = tuple[str, str, FieldInfo, Any]
@@ -129,12 +128,7 @@ def _render_field_lines(
         if idx > 0:
             out.append("")
         type_str = _format_type(info.annotation)
-        meta_parts: list[str] = []
-        default_str = _format_default(info)
-        if default_str is not None:
-            meta_parts.append(f"default: {default_str}")
-        meta_parts.append(f"current: {current!r}")
-        meta_str = f"({_META_SEP.join(meta_parts)})"
+        meta_str = _format_meta(info, current)
 
         if name == full or not leaf_unique.get(name, False):
             label = full
@@ -145,6 +139,20 @@ def _render_field_lines(
             _render_entry(label, type_str, meta_str, info.description, body_width)
         )
     return [f"{_INDENT}{line}" if line else "" for line in out]
+
+
+def _format_meta(info: FieldInfo, current: Any) -> str:
+    """Render the meta block.
+
+    Three forms: ``(default: X)``, ``(default: X → Y)``, or ``(now: X)``.
+    """
+    current_str = repr(current)
+    default_str = _format_default(info)
+    if default_str is None:
+        return f"(now: {current_str})"
+    if default_str == current_str:
+        return f"(default: {default_str})"
+    return f"(default: {default_str} → {current_str})"
 
 
 def _render_entry(
