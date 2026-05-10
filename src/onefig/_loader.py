@@ -13,7 +13,7 @@ YAML_EXTS = (".yaml", ".yml")
 
 def resolve_path(
     name_or_path: str | Path,
-    search_root: Path | None = None,
+    search_root: str | Path | None = None,
 ) -> Path:
     """Resolve a YAML config name or path to a concrete :class:`~pathlib.Path`.
 
@@ -35,10 +35,11 @@ def resolve_path(
     p = Path(name_or_path)
     if p.is_file():
         return p
-    return _find_by_name(str(name_or_path), search_root or Path.cwd())
+    root = Path(search_root) if search_root is not None else Path.cwd()
+    return _find_by_name(str(name_or_path), root)
 
 
-def load_yaml(path: Path) -> dict[str, Any]:
+def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML file and resolve OmegaConf interpolations into a plain dict.
 
     Args:
@@ -47,6 +48,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
     Returns:
         A plain nested ``dict`` with all ``${...}`` interpolations resolved.
     """
+    path = Path(path)
     logger.debug("Loading config from %s", path)
     cfg = OmegaConf.load(path)
     return OmegaConf.to_container(cfg, resolve=True)  # type: ignore[return-value]

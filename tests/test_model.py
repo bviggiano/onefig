@@ -124,6 +124,18 @@ def test_config_name_set_via_name_lookup(tmp_path: Path) -> None:
     assert cfg.config_name == "baseline"
 
 
+def test_load_accepts_string_paths(tmp_path: Path) -> None:
+    nested = tmp_path / "configs"
+    nested.mkdir()
+    (nested / "baseline.yaml").write_text("epochs: 1\n")
+    # search_root as a string
+    cfg = Cfg.load("baseline", search_root=str(tmp_path))
+    assert cfg.epochs == 1
+    # full path as a string
+    cfg = Cfg.load(str(nested / "baseline.yaml"))
+    assert cfg.epochs == 1
+
+
 def test_config_name_not_in_dump() -> None:
     cfg = Cfg()
     object.__setattr__(cfg, "_config_name", "anything")
@@ -173,6 +185,60 @@ def test_save_yaml_accepts_string_path(tmp_path: Path) -> None:
     out = tmp_path / "config.yaml"
     cfg.save_yaml(str(out))
     assert out.read_text().strip() != ""
+
+
+def test_commit_hash_captured_on_construction() -> None:
+    # Running inside this repo, so we expect a 40-char hex hash.
+    cfg = Cfg()
+    assert cfg.commit_hash is not None
+    assert len(cfg.commit_hash) == 40
+    assert all(c in "0123456789abcdef" for c in cfg.commit_hash)
+
+
+def test_commit_hash_captured_via_load(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text("epochs: 3\n")
+    cfg = Cfg.load(p)
+    assert cfg.commit_hash is not None
+
+
+def test_commit_hash_not_in_dump() -> None:
+    cfg = Cfg()
+    assert "commit_hash" not in cfg.to_dict()
+    assert "commit_hash" not in cfg.to_flat_dict()
+
+
+def test_commit_hash_survives_subclass_post_init_override() -> None:
+    """Subclass model_post_init that doesn't call super() must not skip capture."""
+
+    class Derived(ConfigModel):
+        x: int = 0
+        y: int = 0
+        total: int = 0
+
+        def model_post_init(self, __context: object) -> None:
+            object.__setattr__(self, "total", self.x + self.y)
+
+    cfg = Derived(x=2, y=3)
+    assert cfg.total == 5
+    assert cfg.commit_hash is not None
+
+
+def test_commit_hash_none_when_git_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from onefig import _git
+
+    _git.get_commit_hash.cache_clear()
+    monkeypatch.setattr(
+        _git.subprocess,
+        "run",
+        lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("no git")),
+    )
+    try:
+        assert _git.get_commit_hash() is None
+    finally:
+        _git.get_commit_hash.cache_clear()
 
 
 def test_model_post_init_fires_through_load(tmp_path: Path) -> None:
