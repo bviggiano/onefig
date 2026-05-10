@@ -5,7 +5,11 @@ from typing import Literal
 import pytest
 
 from onefig import ConfigModel
-from onefig._completion import completion_candidates, shell_script
+from onefig._completion import (
+    completion_candidates,
+    python_completion_script,
+    shell_script,
+)
 
 
 class _Sched(ConfigModel):
@@ -159,3 +163,50 @@ def test_shell_completion_script_method_accepts_explicit_prog() -> None:
     cfg = _Cfg()
     out = cfg.shell_completion_script("bash", prog="my-cmd")
     assert "my-cmd" in out
+
+
+def test_python_wrapper_bash_targets_python_commands() -> None:
+    out = python_completion_script("bash")
+    assert "_onefig_python_complete" in out
+    assert "complete -o nospace -F _onefig_python_complete python python3" in out
+    # Walks the command line, calls back into the script with --onefig-completions.
+    assert "--onefig-completions" in out
+    # Falls back to file completion while the user is still typing the script.
+    assert "compgen -f" in out
+
+
+def test_python_wrapper_zsh_uses_compdef() -> None:
+    out = python_completion_script("zsh")
+    assert "#compdef python python3" in out
+    assert "--onefig-completions" in out
+    assert "_files" in out  # fallback while typing the script
+
+
+def test_python_wrapper_fish_targets_python_commands() -> None:
+    out = python_completion_script("fish")
+    assert "function __onefig_python_complete" in out
+    assert "-c python" in out
+    assert "-c python3" in out
+    assert "--onefig-completions" in out
+
+
+def test_python_wrapper_unknown_shell_raises() -> None:
+    with pytest.raises(ValueError, match="Unsupported shell"):
+        python_completion_script("tcsh")
+
+
+def test_install_python_completion_via_cli_flag(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = _Cfg()
+    cfg.update_from_cli(
+        ["--onefig-install-python-completion", "bash"], exit_on_completion=False
+    )
+    out = capsys.readouterr().out
+    assert "_onefig_python_complete" in out
+
+
+def test_python_wrapper_completion_script_method() -> None:
+    cfg = _Cfg()
+    out = cfg.python_wrapper_completion_script("bash")
+    assert "_onefig_python_complete" in out

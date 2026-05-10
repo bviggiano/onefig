@@ -1,21 +1,21 @@
 """Shell tab completion for ``key=value`` overrides.
 
-Two flags drive the completion machinery:
+Three flags drive the completion machinery:
 
 * ``--onefig-install-completion <bash|zsh|fish>`` prints an install snippet
-  for the calling script. Pipe it into a sourced rc file (or ``source``
-  directly) to enable TAB completion for this script.
+  for the calling script. Used when the script is directly executable
+  (``chmod +x`` with a shebang, or installed as a console-script).
+* ``--onefig-install-python-completion <bash|zsh|fish>`` prints a generic
+  install snippet that enables TAB completion for *every* onefig-based
+  script invoked via ``python <script>.py``. One-time install per shell.
 * ``--onefig-completions [PARTIAL]`` is the machine-readable callback used
-  by the installed scripts. Each line of output is a completion candidate.
+  by both installed scripts. Each line of output is a completion candidate.
 
 Try (from the repo root):
 
     python examples/06_completion.py --onefig-completions opt
     python examples/06_completion.py --onefig-install-completion bash
-
-For TAB completion to actually trigger in your shell, the script must be
-directly executable (e.g. ``chmod +x`` with a shebang line). Running via
-``python script.py`` is not supported by the shell-completion mechanism.
+    python examples/06_completion.py --onefig-install-python-completion bash
 """
 
 from __future__ import annotations
