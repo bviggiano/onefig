@@ -44,41 +44,51 @@ def test_help_includes_field_paths() -> None:
     assert "lr : float" in out
 
 
-def test_help_collapses_meta_when_value_matches_default() -> None:
+def test_head_uses_annotation_syntax_with_current_value() -> None:
+    """Head reads as ``label : type = current``."""
+    out = format_help(_Cfg())
+    assert "epochs : int = 10" in out
+
+
+def test_unchanged_field_omits_default_footnote() -> None:
     cfg = _Cfg()  # nothing overridden
     out = format_help(cfg)
-    # Unchanged fields show only the default; no arrow, no current.
-    assert "(default: 10)" in out
-    assert "→" not in out
+    # No '(default: ...)' for fields that still match their declared default.
+    assert "(default:" not in out
 
 
-def test_help_shows_arrow_form_when_overridden() -> None:
+def test_overridden_field_shows_default_footnote() -> None:
     cfg = _Cfg()
     cfg.epochs = 99
     out = format_help(cfg)
-    # Overridden fields show default → current.
-    assert "(default: 10 → 99)" in out
+    assert "epochs : int = 99" in out
+    assert "(default: 10)" in out
 
 
-def test_required_field_uses_now_form() -> None:
+def test_required_field_omits_default_footnote() -> None:
     class Req(ConfigModel):
         x: int  # required, no default
 
     out = format_help(Req(x=5))
-    assert "(now: 5)" in out
-    assert "default:" not in out
+    assert "x : int = 5" in out
+    assert "(default:" not in out
 
 
 def test_help_renders_literal_choices() -> None:
     out = format_help(_Cfg())
-    assert "{'sgd', 'adam', 'adamw'}" in out
+    assert "Literal['sgd', 'adam', 'adamw']" in out
 
 
 def test_help_renders_enum_choices() -> None:
     out = format_help(_Cfg())
-    assert "_Loss" in out
-    assert "'cross_entropy'" in out
-    assert "'mse'" in out
+    # Enum types render as ``Name['v1', 'v2']`` to mirror Literal.
+    assert "_Loss['cross_entropy', 'mse']" in out
+
+
+def test_enum_current_value_renders_as_underlying_value() -> None:
+    out = format_help(_Cfg())
+    # Current Loss.CE shows as 'cross_entropy', not <_Loss.CE: 'cross_entropy'>.
+    assert "loss : _Loss['cross_entropy', 'mse'] = 'cross_entropy'" in out
 
 
 def test_help_includes_attribute_docstrings() -> None:
@@ -96,18 +106,12 @@ def test_description_starts_on_a_new_indented_line() -> None:
 
     out = format_help(Tiny())
     lines = out.splitlines()
-    head_idx = next(
-        i
-        for i, line in enumerate(lines)
-        if "epochs : int" in line and "(default: 10" in line
-    )
+    head_idx = next(i for i, line in enumerate(lines) if "epochs : int = 10" in line)
     next_line = lines[head_idx + 1]
     inner = next_line.strip("│").rstrip()
     leading_spaces = len(inner) - len(inner.lstrip(" "))
     assert leading_spaces >= 6, next_line
     assert "Number of epochs." in next_line
-    # The pipe separator is no longer used in the layout.
-    assert " | " not in lines[head_idx]
 
 
 def test_long_description_overflow_stays_tab_indented() -> None:
@@ -189,7 +193,7 @@ def test_unique_leaf_shows_just_the_leaf_name() -> None:
     out = format_help(_Cfg())
     # 'kind' is unique to optimizer.kind, so the entry shows only "kind".
     # The panel title 'optimizer' already provides the parent context.
-    assert "kind : {'sgd', 'adam', 'adamw'}" in out
+    assert "kind : Literal['sgd', 'adam', 'adamw']" in out
     assert "lr : float" in out
     # No annotated full-path suffix anywhere.
     assert "(optimizer.kind)" not in out
