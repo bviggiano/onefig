@@ -44,13 +44,29 @@ def test_help_includes_field_paths() -> None:
     assert "lr : float" in out
 
 
-def test_help_shows_default_and_current() -> None:
+def test_help_collapses_meta_when_value_matches_default() -> None:
+    cfg = _Cfg()  # nothing overridden
+    out = format_help(cfg)
+    # Unchanged fields show only the default; no arrow, no current.
+    assert "(default: 10)" in out
+    assert "→" not in out
+
+
+def test_help_shows_arrow_form_when_overridden() -> None:
     cfg = _Cfg()
     cfg.epochs = 99
     out = format_help(cfg)
-    # default and current both shown for epochs
-    assert "default: 10" in out
-    assert "current: 99" in out
+    # Overridden fields show default → current.
+    assert "(default: 10 → 99)" in out
+
+
+def test_required_field_uses_now_form() -> None:
+    class Req(ConfigModel):
+        x: int  # required, no default
+
+    out = format_help(Req(x=5))
+    assert "(now: 5)" in out
+    assert "default:" not in out
 
 
 def test_help_renders_literal_choices() -> None:
@@ -211,17 +227,6 @@ def test_help_lists_special_flags() -> None:
     assert "--show" in out
     assert "--help" in out
     assert "-h" in out
-
-
-def test_required_field_has_no_default_line() -> None:
-    class Req(ConfigModel):
-        x: int  # required, no default
-
-    out = format_help(Req(x=5))
-    # Required fields shouldn't show "default:" anywhere.
-    assert "default:" not in out
-    assert "current: 5" in out
-    assert "x : int" in out
 
 
 def test_print_help_method(capsys: pytest.CaptureFixture[str]) -> None:

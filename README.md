@@ -114,7 +114,7 @@ $ python script.py --help
 │                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                      │
-│   epochs : int  (default: 10  ·  current: 10)                                        │
+│   epochs : int  (default: 10)                                                        │
 │       Number of epochs.                                                               │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
@@ -141,6 +141,10 @@ Each entry's head sits on the first line (with metadata inline when it fits,
 on its own hang-indented line otherwise). The description always starts on a
 new tab-indented line below, and overflow continues at the same indent. The
 layout adapts to your terminal width.
+
+The metadata is compact: `(default: X)` when the field still has its default
+value, `(default: X → Y)` when an override has changed it, and `(now: X)` for
+required fields that have no declared default.
 
 `Literal[...]` choices and `Enum` members are surfaced inline so users can
 discover valid values without grepping the schema. Field docstrings (PEP 257)
