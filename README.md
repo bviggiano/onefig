@@ -86,9 +86,10 @@ python script.py --help                   # list every overridable field
 `update_from_cli` intercepts `--help` / `-h` and prints every overridable
 field (with its type, default, current value, and docstring) before exiting.
 No argparse, no manual help string to maintain; the schema is the docs.
-Each nested `ConfigModel` gets its own boxed sub-panel, and unambiguous
-leaf names are shown alongside their full dotted path so the CLI shortcut
-is discoverable:
+Each nested `ConfigModel` gets its own boxed sub-panel; entries show only
+the leaf name when it's an unambiguous CLI shortcut, and fall back to the
+full dotted path when the leaf is ambiguous (because that's the only form
+the override engine would accept):
 
 ```python
 from typing import Literal
@@ -120,12 +121,11 @@ $ python script.py --help
 
 ╭─ optimizer ──────────────────────────────────────────────────────────────────────────╮
 │                                                                                      │
-│   kind (optimizer.kind) : {'sgd', 'adam', 'adamw'}                                   │
-│       (default: 'sgd'  ·  current: 'sgd')                                            │
+│   kind : {'sgd', 'adam', 'adamw'}  (default: 'sgd'  ·  current: 'sgd')               │
 │       Which optimizer to use.                                                        │
 │                                                                                      │
-│   lr (optimizer.lr) : float  (default: 0.0001  ·  current: 0.0001)                   │
-│       Learning rate.                                                                  │
+│   lr : float  (default: 0.0001  ·  current: 0.0001)                                  │
+│       Learning rate.                                                                 │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 

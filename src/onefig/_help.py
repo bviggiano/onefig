@@ -139,7 +139,7 @@ def _render_field_lines(
         if name == full or not leaf_unique.get(name, False):
             label = full
         else:
-            label = f"{name} ({full})"
+            label = name
 
         out.extend(
             _render_entry(label, type_str, meta_str, info.description, body_width)
