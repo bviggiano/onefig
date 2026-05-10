@@ -49,7 +49,7 @@ model:
   lr: 0.001
 ```
 
-Wire up a script:
+Use the config in a script:
 
 ```python
 from onefig import ConfigModel
@@ -85,11 +85,12 @@ python script.py --help                   # list every overridable field
 
 `update_from_cli` intercepts `--help` / `-h` and prints every overridable
 field (with its type, default, current value, and docstring) before exiting.
-No argparse, no manual help string to maintain; the schema is the docs.
-Each nested `ConfigModel` gets its own boxed sub-panel; entries show only
-the leaf name when it's an unambiguous CLI shortcut, and fall back to the
-full dotted path when the leaf is ambiguous (because that's the only form
-the override engine would accept):
+The help text is generated directly from the `ConfigModel` schema, so it
+stays accurate without manual maintenance. Each nested `ConfigModel`
+renders as its own sub-panel. Entries show the leaf name alone when that
+name resolves to a single field, and the full dotted path otherwise (which
+matches the only form the override engine accepts when a leaf is
+ambiguous):
 
 ```python
 from typing import Literal
@@ -148,34 +149,62 @@ description (it wraps to the next indented line if it overflows). Run with
 │       Learning rate. (default: 0.0001)                                               │
 ```
 
-`Literal[...]` choices and `Enum` members are surfaced inline so users can
-discover valid values without grepping the schema. Field docstrings (PEP 257)
-populate the descriptions automatically; an explicit
-`Field(description=...)` takes precedence if you'd rather decouple the doc
-from the source. Print the same block manually with `cfg.print_help()` (or
-get the string via `cfg.format_help()`); useful when wiring help into your
-own argparse setup.
+`Literal[...]` choices and `Enum` members are listed inline so users can
+discover valid values from the help output. Field docstrings (PEP 257) are
+used as descriptions automatically; an explicit `Field(description=...)`
+takes precedence when both are provided. The same output is available as
+`cfg.print_help()` (or `cfg.format_help()` for the string), which is
+useful when integrating with an argparse-driven entry point.
+
+### Shell tab completion
+
+`update_from_cli` recognizes two flags that drive shell completion for
+overridable fields. The first prints an install snippet for `bash`, `zsh`,
+or `fish`; the second is a machine-readable interface that the installed
+script calls back into:
+
+```bash
+# Install for the current bash session.
+source <(./train.py --onefig-install-completion bash)
+
+# Or persist for future sessions.
+./train.py --onefig-install-completion bash >> ~/.bashrc
+
+# Then completion is available on TAB.
+./train.py opt<TAB>          # → optimizer.kind=  optimizer.lr=  ...
+./train.py l<TAB>            # → lr=
+```
+
+The completion list contains every overridable full dotted path (suffixed
+with `=`), every unambiguous leaf-name shortcut, and the special flags
+`--show`, `--help`, `-h`. Ambiguous leaves are deliberately omitted so
+users aren't offered a shortcut the override engine would refuse.
+
+The script must be directly executable (e.g. `chmod +x train.py` with a
+shebang line, or installed via a console-script entry point) for the
+shell to bind completion to the command name. `python script.py` form
+is not supported by the shell-completion mechanism.
 
 ### CLI overrides without argparse
 
-`update_from_cli` parses `key=value` tokens straight from `sys.argv`. No flag
-declarations needed:
+`update_from_cli` parses `key=value` tokens directly from `sys.argv`, so no
+flag declarations are required:
 
 ```python
 cfg = TrainCfg.load("train")
 cfg.update_from_cli()                      # python script.py lr=0.001 epochs=20
 ```
 
-Leaf-key shortcuts work too — onefig resolves `lr` to `model.lr` if it's
-unambiguous:
+Leaf-key shortcuts are also supported: onefig resolves `lr` to `model.lr`
+when the leaf name is unambiguous in the schema:
 
 ```bash
 python script.py lr=0.001                  # → cfg.model.lr = 0.001
 ```
 
-Need argparse instead (e.g. for help text, custom flag types, sweep tooling)?
-Use `update_from_args` — same override engine, same leaf-key trick, takes a
-parsed Namespace:
+For argparse-driven setups (custom flag types, integration with sweep
+tooling, etc.), `update_from_args` accepts a parsed `Namespace` and uses
+the same override engine and leaf-key resolution:
 
 ```python
 import argparse
@@ -289,9 +318,11 @@ print(cfg.epochs)          # reads always work
 - **Schema-aware `--help`** — `python script.py --help` prints every
   overridable field with its type, default, current value, and docstring.
   `Literal` / `Enum` choices are surfaced inline.
-- **Smart leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` if it's
-  unambiguous. Conflicts raise with a clear message.
-- **Round-trippable** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
+- **Shell tab completion** — install snippets for `bash`, `zsh`, and
+  `fish` complete every overridable key from the schema.
+- **Leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` when the
+  leaf name is unambiguous; conflicts raise with a clear message.
+- **Round-trip serialization** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
   `cfg.to_flat_dict()` ↔ `Cfg.from_flat_dict()`.
 - **Recursive freeze** — `cfg.freeze()` makes the whole tree immutable.
 - **Tree display** — `cfg.display()` prints an ASCII tree, no `rich` dep.
@@ -329,14 +360,18 @@ cfg.save_yaml("snapshot.yaml")              # write YAML to disk
 cfg.display(name="MyRun")                    # print ASCII tree to stdout
 cfg.print_help()                             # schema-aware help (also via --help)
 cfg.format_help()                            # same, returned as a string
+
+# Shell completion
+cfg.completion_candidates()                  # list of completion tokens
+cfg.shell_completion_script("bash")          # install snippet (bash | zsh | fish)
 ```
 
 ## Examples
 
-Runnable demos live in [`examples/`](examples/) — one Python script per
-feature plus a guided notebook. Start with
-[`examples/01_basic.py`](examples/01_basic.py) and see
-[`examples/README.md`](examples/README.md) for the full menu.
+Runnable scripts live in [`examples/`](examples/), with one Python file per
+feature plus a notebook walkthrough. Start with
+[`examples/01_basic.py`](examples/01_basic.py); the complete list is in
+[`examples/README.md`](examples/README.md).
 
 ## License
 
