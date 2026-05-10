@@ -17,7 +17,7 @@ A simple, typed YAML config system for Python that tries to unite the best aspec
 
 ## Why?
 
-Configuration management is at the heart of most ML workflows, but can be wildly [annoying](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/configurator.py#L12-L14) to deal with. This repo is a simple pythonic config management system that tries to tie in the best aspects of [OmegaConf](https://omegaconf.readthedocs.io/) (flexible YAML loading and interpolation) and [Pydantic v2](https://docs.pydantic.dev/) (strict typing and validation), in a simple API. I took heavy inspiration from [Hydra](https://github.com/facebookresearch/hydra), [Pydra](https://github.com/jordan-benjamin/pydra), and [tyro](https://github.com/brentyi/tyro).
+Configuration management is at the heart of most ML workflows, but can be wildly [annoying](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/configurator.py#L12-L14) to deal with. This repo is a simple pythonic config management system that tries to tie in the best aspects of [OmegaConf](https://omegaconf.readthedocs.io/) (flexible YAML loading and interpolation) and [Pydantic v2](https://docs.pydantic.dev/) (strict typing and validation), in a simple API. onefig takes heavy inspiration from [Hydra](https://github.com/facebookresearch/hydra), [Pydra](https://github.com/jordan-benjamin/pydra), and [tyro](https://github.com/brentyi/tyro).
 
 `onefig` was built for my own projects, but figured others might find it useful too. Contributions and suggestions are welcome!
 
@@ -104,23 +104,31 @@ class TrainCfg(ConfigModel):
 
 ```text
 $ python script.py --help
-train
-
-Override fields with key=value (or use --show / --help).
-
-Fields:
-  epochs : int  (default: 10, current: 10)
-      Number of epochs.
-
-  optimizer.kind : {'sgd', 'adam', 'adamw'}  (default: 'sgd', current: 'sgd')
-      Which optimizer to use.
-
-  optimizer.lr : float  (default: 0.0001, current: 0.0001)
-      Learning rate.
-
-Special flags:
-  --show         Print the resolved config and exit.
-  --help, -h     Show this help and exit.
+╭─ train ──────────────────────────────────────────────────────────────────────────────╮
+│                                                                                      │
+│ Override fields with key=value (or use --show / --help).                             │
+│                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│   epochs : int                                                                       │
+│       (default: 10  ·  current: 10)                                                  │
+│       Number of epochs.                                                              │
+│                                                                                      │
+│   optimizer.kind : {'sgd', 'adam', 'adamw'}                                          │
+│       (default: 'sgd'  ·  current: 'sgd')                                            │
+│       Which optimizer to use.                                                        │
+│                                                                                      │
+│   optimizer.lr : float                                                               │
+│       (default: 0.0001  ·  current: 0.0001)                                          │
+│       Learning rate.                                                                 │
+│                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│ Special flags:                                                                       │
+│   --show         Print the resolved config and exit.                                 │
+│   --help, -h     Show this help and exit.                                            │
+│                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 `Literal[...]` choices and `Enum` members are surfaced inline so users can

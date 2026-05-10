@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import enum
+import shutil
+import textwrap
+from collections.abc import Sequence
 from typing import Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel
@@ -11,52 +14,138 @@ try:
 except ImportError:  # pragma: no cover
     UnionType = None  # type: ignore[assignment,misc]
 
+_MIN_WIDTH = 60
+_MAX_WIDTH = 100
+_INDENT = "  "
+_META_SEP = "  ·  "
+
 
 def format_help(model: BaseModel, title: str | None = None) -> str:
-    """Render a schema-aware help string for a :class:`ConfigModel` instance.
+    """Render a schema-aware help panel for a :class:`ConfigModel` instance.
 
-    Walks the model recursively and produces one block per leaf field
-    (non-:class:`ConfigModel` value), showing dotted path, type, default,
-    current value, and the field's docstring/description.
+    Walks the model recursively and produces a tyro-style boxed panel
+    showing each leaf field's dotted path, type, default, current value,
+    and docstring/description.
 
     Args:
         model: A Pydantic model instance to introspect.
-        title: Header for the help block. Defaults to the model class name.
+        title: Header for the panel. Defaults to the model class name.
 
     Returns:
         A multi-line string ready to print.
     """
     header = title or type(model).__name__
-    lines: list[str] = [header, ""]
-    lines.append("Override fields with key=value (or use --show / --help).")
-    lines.append("")
-    lines.append("Fields:")
+    width = _resolve_width()
+    text_width = width - 4  # exclude '│ ' on the left and ' │' on the right
 
+    intro = textwrap.wrap(
+        "Override fields with key=value (or use --show / --help).",
+        width=text_width,
+    )
+
+    field_section = _build_field_lines(model, text_width)
+
+    flags_section = [
+        "Special flags:",
+        f"{_INDENT}--show         Print the resolved config and exit.",
+        f"{_INDENT}--help, -h     Show this help and exit.",
+    ]
+
+    return _render_panel(
+        header,
+        sections=[intro, field_section, flags_section],
+        width=width,
+    )
+
+
+def _resolve_width() -> int:
+    term = shutil.get_terminal_size((88, 20)).columns
+    return max(_MIN_WIDTH, min(term, _MAX_WIDTH))
+
+
+def _build_field_lines(model: BaseModel, text_width: int) -> list[str]:
     entries = list(_iter_fields(model))
     if not entries:
-        lines.append("  (no fields)")
-    for path, info, current in entries:
-        type_str = _format_type(info.annotation)
-        default_str = _format_default(info)
-        current_str = repr(current)
-        desc = info.description
+        return ["(no fields)"]
 
-        head = f"  {path} : {type_str}"
+    body_width = max(20, text_width - len(_INDENT))
+    out: list[str] = []
+    for idx, (path, info, current) in enumerate(entries):
+        if idx > 0:
+            out.append("")
+        type_str = _format_type(info.annotation)
         meta_parts: list[str] = []
+        default_str = _format_default(info)
         if default_str is not None:
             meta_parts.append(f"default: {default_str}")
-        meta_parts.append(f"current: {current_str}")
-        head += f"  ({', '.join(meta_parts)})"
-        lines.append(head)
-        if desc:
-            for desc_line in desc.splitlines():
-                lines.append(f"      {desc_line}")
-        lines.append("")
+        meta_parts.append(f"current: {current!r}")
 
-    lines.append("Special flags:")
-    lines.append("  --show         Print the resolved config and exit.")
-    lines.append("  --help, -h     Show this help and exit.")
-    return "\n".join(lines)
+        out.extend(_wrap_with_indent(f"{path} : {type_str}", body_width, hang="    "))
+        out.extend(
+            _wrap_with_indent(
+                f"({_META_SEP.join(meta_parts)})", body_width, hang="    ", lead="    "
+            )
+        )
+        if info.description:
+            for raw in info.description.splitlines():
+                out.extend(
+                    _wrap_with_indent(raw, body_width, hang="    ", lead="    ")
+                    or ["    "]
+                )
+    return [f"{_INDENT}{line}" if line else "" for line in out]
+
+
+def _wrap_with_indent(
+    text: str, width: int, *, hang: str = "", lead: str = ""
+) -> list[str]:
+    """Wrap ``text``; first line uses ``lead``, continuation lines use ``hang``."""
+    wrapped = textwrap.wrap(
+        text,
+        width=width,
+        initial_indent=lead,
+        subsequent_indent=hang,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    return wrapped or [lead]
+
+
+def _render_panel(title: str, sections: Sequence[Sequence[str]], width: int) -> str:
+    inner = width - 2  # chars between corner glyphs
+    text_width = width - 4  # chars usable for actual content
+
+    title_str = f" {title} "
+    dashes = inner - 1 - len(title_str)
+    if dashes < 1:
+        # Title too long for the chosen width; degrade gracefully.
+        out_lines = ["╭" + "─" * inner + "╮", _pad(title.center(text_width), width)]
+    else:
+        out_lines = ["╭─" + title_str + "─" * dashes + "╮"]
+
+    nonempty_sections = [s for s in sections if s]
+    for i, section in enumerate(nonempty_sections):
+        if i > 0:
+            out_lines.append("├" + "─" * inner + "┤")
+        out_lines.append(_pad("", width))
+        for raw_line in section:
+            out_lines.append(_pad(_truncate(raw_line, text_width), width))
+        out_lines.append(_pad("", width))
+
+    out_lines.append("╰" + "─" * inner + "╯")
+    return "\n".join(out_lines)
+
+
+def _pad(content: str, width: int) -> str:
+    text_width = width - 4
+    return "│ " + content.ljust(text_width) + " │"
+
+
+def _truncate(line: str, width: int) -> str:
+    if len(line) <= width:
+        return line
+    if width <= 1:
+        return line[:width]
+    return line[: width - 1] + "…"
 
 
 def _iter_fields(

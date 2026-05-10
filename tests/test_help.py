@@ -87,12 +87,31 @@ def test_help_renders_list_type() -> None:
 
 def test_help_title_defaults_to_class_name() -> None:
     out = format_help(_Cfg())
-    assert out.startswith("_Cfg")
+    first_line = out.splitlines()[0]
+    assert "_Cfg" in first_line
+    assert first_line.startswith("╭")
 
 
 def test_help_title_override() -> None:
     out = format_help(_Cfg(), title="MyExperiment")
-    assert out.startswith("MyExperiment")
+    assert "MyExperiment" in out.splitlines()[0]
+
+
+def test_help_renders_a_panel_with_rounded_corners() -> None:
+    out = format_help(_Cfg()).splitlines()
+    assert out[0].startswith("╭") and out[0].endswith("╮")
+    assert out[-1].startswith("╰") and out[-1].endswith("╯")
+    # All body lines are bordered with │ on both ends.
+    body = out[1:-1]
+    assert all(
+        line.startswith(("│", "├")) and line.endswith(("│", "┤")) for line in body
+    ), body
+
+
+def test_help_panel_has_section_dividers() -> None:
+    out = format_help(_Cfg())
+    # Three sections (intro, fields, flags) → two dividers.
+    assert out.count("├") == 2
 
 
 def test_help_lists_special_flags() -> None:
@@ -107,11 +126,10 @@ def test_required_field_has_no_default_line() -> None:
         x: int  # required, no default
 
     out = format_help(Req(x=5))
-    # Required fields shouldn't show "default:"
-    field_block = [line for line in out.splitlines() if line.strip().startswith("x ")]
-    assert field_block, out
-    assert "default:" not in field_block[0]
-    assert "current: 5" in field_block[0]
+    # Required fields shouldn't show "default:" anywhere.
+    assert "default:" not in out
+    assert "current: 5" in out
+    assert "x : int" in out
 
 
 def test_print_help_method(capsys: pytest.CaptureFixture[str]) -> None:
@@ -126,14 +144,15 @@ def test_format_help_method_uses_config_name() -> None:
     cfg = _Cfg()
     cfg.config_name = "my_run"
     out = cfg.format_help()
-    assert out.startswith("my_run")
+    assert "my_run" in out.splitlines()[0]
 
 
 def test_format_help_explicit_title_overrides_config_name() -> None:
     cfg = _Cfg()
     cfg.config_name = "my_run"
     out = cfg.format_help(title="Override")
-    assert out.startswith("Override")
+    assert "Override" in out.splitlines()[0]
+    assert "my_run" not in out.splitlines()[0]
 
 
 def test_help_flag_in_update_from_cli_exits(
