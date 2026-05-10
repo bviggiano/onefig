@@ -113,7 +113,8 @@ $ python script.py --help
 │                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                      │
-│   epochs : int  (default: 10  ·  current: 10)  |  Number of epochs.                  │
+│   epochs : int  (default: 10  ·  current: 10)                                        │
+│       Number of epochs.                                                               │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -123,8 +124,8 @@ $ python script.py --help
 │       (default: 'sgd'  ·  current: 'sgd')                                            │
 │       Which optimizer to use.                                                        │
 │                                                                                      │
-│   lr (optimizer.lr) : float  (default: 0.0001  ·  current: 0.0001)  |  Learning      │
-│       rate.                                                                          │
+│   lr (optimizer.lr) : float  (default: 0.0001  ·  current: 0.0001)                   │
+│       Learning rate.                                                                  │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -136,11 +137,10 @@ $ python script.py --help
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-Each entry packs as much onto one line as it can: when everything fits, the
-description follows ``|`` after the metadata; when it doesn't, the description
-continues hang-indented below; if the head + meta themselves don't fit, the
-metadata moves to its own indented line. The layout adapts to your terminal
-width.
+Each entry's head sits on the first line (with metadata inline when it fits,
+on its own hang-indented line otherwise). The description always starts on a
+new tab-indented line below, and overflow continues at the same indent. The
+layout adapts to your terminal width.
 
 `Literal[...]` choices and `Enum` members are surfaced inline so users can
 discover valid values without grepping the schema. Field docstrings (PEP 257)

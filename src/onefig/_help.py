@@ -156,88 +156,40 @@ def _render_entry(
 ) -> list[str]:
     """Lay out one field entry.
 
-    Layout — most preferred first:
-      1. ``<head> | <description>`` on a single line.
-      2. ``<head>`` on one line; description hang-indented below.
-      3. ``<label> : <type>`` on one line; ``meta`` hang-indented; description below.
-      4. Pathological narrow widths: wrap everything with hang indents.
+    Head sits on the first line (with metadata inline when it fits, on its
+    own hang-indented line otherwise). The description always starts on a
+    new line, hang-indented, and overflow continues at the same indent.
     """
-    sep = "  |  "
     cont_width = max(20, body_width - len(_HANG))
-    desc = " ".join(description.splitlines()).strip() if description else ""
 
     head_full = f"{label} : {type_str}  {meta_str}"
     head_short = f"{label} : {type_str}"
 
     if len(head_full) <= body_width:
-        head_line = head_full
-        below: list[str] = []
+        out = [head_full]
     elif len(head_short) <= body_width:
-        head_line = head_short
-        below = [f"{_HANG}{meta_str}"]
+        out = [head_short, f"{_HANG}{meta_str}"]
     else:
-        head_lines = textwrap.wrap(
+        out = textwrap.wrap(
             head_full,
             width=body_width,
             subsequent_indent=_HANG,
             break_long_words=False,
             break_on_hyphens=False,
         ) or [head_full]
+
+    if description:
+        desc = " ".join(description.splitlines()).strip()
         if desc:
-            head_lines.extend(
-                f"{_HANG}{cl}"
-                for cl in textwrap.wrap(
-                    desc,
-                    width=cont_width,
-                    break_long_words=False,
-                    break_on_hyphens=False,
-                )
+            desc_lines = textwrap.wrap(
+                desc,
+                width=cont_width,
+                break_long_words=False,
+                break_on_hyphens=False,
             )
-        return head_lines
+            out.extend(f"{_HANG}{cl}" for cl in desc_lines)
 
-    if not desc:
-        return [head_line] + below
-
-    if not below:
-        # Try to fit at least one description word on the head line.
-        first_avail = body_width - len(head_line) - len(sep)
-        if first_avail >= 10:
-            words = desc.split()
-            first_words: list[str] = []
-            cur = 0
-            consumed = 0
-            for i, word in enumerate(words):
-                gap = 1 if first_words else 0
-                new_len = cur + gap + len(word)
-                if new_len > first_avail:
-                    break
-                first_words.append(word)
-                cur = new_len
-                consumed = i + 1
-            if first_words:
-                first_text = " ".join(first_words)
-                remaining = " ".join(words[consumed:])
-                out_lines = [f"{head_line}{sep}{first_text}"]
-                if remaining:
-                    out_lines.extend(
-                        f"{_HANG}{cl}"
-                        for cl in textwrap.wrap(
-                            remaining,
-                            width=cont_width,
-                            break_long_words=False,
-                            break_on_hyphens=False,
-                        )
-                    )
-                return out_lines
-
-    # Description goes on its own indented line(s).
-    desc_lines = textwrap.wrap(
-        desc,
-        width=cont_width,
-        break_long_words=False,
-        break_on_hyphens=False,
-    )
-    return [head_line] + below + [f"{_HANG}{cl}" for cl in desc_lines]
+    return out
 
 
 def _render_panel(title: str, sections: Sequence[Sequence[str]], width: int) -> str:
