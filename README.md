@@ -121,10 +121,10 @@ $ python script.py --help
 
 ╭─ optimizer ──────────────────────────────────────────────────────────────────────────╮
 │                                                                                      │
-│   kind : {'sgd', 'adam', 'adamw'}  (default: 'sgd'  ·  current: 'sgd')               │
+│   kind : {'sgd', 'adam', 'adamw'}  (default: 'sgd')                                  │
 │       Which optimizer to use.                                                        │
 │                                                                                      │
-│   lr : float  (default: 0.0001  ·  current: 0.0001)                                  │
+│   lr : float  (default: 0.0001)                                                      │
 │       Learning rate.                                                                 │
 │                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
