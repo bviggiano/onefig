@@ -9,6 +9,7 @@
 ```bash
 pip install onefig
 ```
+![hero.png](hero.png)
 
 > **One config to rule them all.**
 
@@ -23,7 +24,6 @@ brittle. onefig is the small, sharp middle: write a Pydantic schema, load YAML,
 override from CLI, freeze it, and run.
 
 > *"All we have to decide is what to do with the time that is given us."*
-> — and we have decided not to waste it on config boilerplate.
 
 ## Quickstart
 
@@ -238,6 +238,3 @@ cfg.display(name="MyRun")                    # print ASCII tree to stdout
 MIT
 
 ---
-
-> *"Even the smallest person can change the course of the future."*
-> — and the smallest config library can change the course of your script.
