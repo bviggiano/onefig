@@ -5,6 +5,7 @@
 [![CI](https://github.com/bviggiano/onefig/actions/workflows/ci.yml/badge.svg)](https://github.com/bviggiano/onefig/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Memes](https://img.shields.io/badge/memes-watch-blueviolet)](#memes)
 
 ```bash
 pip install onefig
@@ -445,6 +446,18 @@ MIT
 
 ---
 
+## Memes
+
 <p align="center">
-  <img src="assets/lotr/gandalf-nod.gif" width="80" alt="Gandalf nod">
+  <a href="https://www.youtube.com/watch?v=Y5NTgZA-xWE">
+    <img src="assets/lotr/one-ring.png" width="80" alt="The One Ring">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://youtube.com/shorts/u5sLlWVtC68">
+    <img src="assets/lotr/gandalf-nod.gif" width="80" alt="Gandalf nod">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://www.youtube.com/watch?v=uE-1RPDqJAY">
+    <img src="assets/lotr/theyre-taking-the-hobbits-to-isengard.gif" width="80" alt="They're taking the hobbits to Isengard">
+  </a>
 </p>
