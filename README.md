@@ -327,6 +327,39 @@ run_dir.mkdir(parents=True, exist_ok=True)
 cfg.save_yaml(run_dir / "config.yaml")     # round-trippable via TrainCfg.load(...)
 ```
 
+### Diff configs
+
+> *"The Council of Elrond."*
+
+`diff` reports the leaf-level changes between two configs (or between a
+config and a flat/nested dict). Useful for PR-style "what changed in
+this run" summaries, experiment-log entries, and confirming an
+overridden run actually moved the fields you intended:
+
+```python
+baseline = TrainCfg.load("base")
+run = TrainCfg.load("base")
+run.update_from_cli(["lr=0.01", "epochs=20"])
+
+run.diff(baseline)
+# {"epochs": (20, 10), "model.lr": (0.01, 0.001)}
+```
+
+`diff_from_defaults` compares a config against a default-constructed
+instance of its type — every entry is a field the user actually
+deviated from:
+
+```python
+cfg.diff_from_defaults()
+# {"model.lr": (1e-4, 0.001), "epochs": (10, 20)}
+```
+
+Keys present on only one side use `onefig.MISSING` as the absent
+value, so diffing against partial dicts (or across schemas with
+extra/missing keys) is well-defined. The result is an ordered dict
+(self's keys first, in their declared order), so output is stable
+across runs.
+
 ### Capture the running code's commit hash
 
 Every config automatically captures the current `git HEAD` hash on
@@ -476,6 +509,10 @@ print(cfg.epochs)          # reads always work
   leaf name is unambiguous; conflicts raise with a clear message.
 - **Round-trip serialization** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
   `cfg.to_flat_dict()` ↔ `Cfg.from_flat_dict()`.
+- **Config diff** — `cfg.diff(other)` and `cfg.diff_from_defaults()`
+  surface leaf-level changes as `{path: (old, new)}`, with a `MISSING`
+  sentinel for cross-schema gaps. Handy for run logs and PR-style
+  "what changed" output.
 - **Recursive freeze** — `cfg.freeze()` makes the whole tree immutable.
 - **Tree display** — `cfg.display()` prints an ASCII tree, no `rich` dep.
 - **Auto config name** — `cfg.config_name` is set from the YAML filename and
@@ -508,6 +545,10 @@ cfg.commit_hash                              # str | None — git HEAD captured 
 cfg.to_dict()                                # nested dict
 cfg.to_flat_dict()                           # {"model.lr": 0.001, ...}
 cfg.save_yaml("snapshot.yaml")              # write YAML to disk
+
+# Diffing
+cfg.diff(other_cfg_or_dict)                  # {"model.lr": (0.001, 0.01), ...}
+cfg.diff_from_defaults()                     # diff vs type(cfg)()
 
 # Display
 cfg.display(name="MyRun")                    # print ASCII tree to stdout
