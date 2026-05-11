@@ -165,22 +165,38 @@ def test_format_diff_basic_alignment() -> None:
         "model.lr": (1e-4, 1e-3),
     }
     out = format_diff(diff, color=False)
-    # Keys padded to common width; arrow separator.
+    # Keys padded to common width; arrow separator; two-space indent on
+    # changed rows leaves room for `+ ` / `- ` markers.
     assert out == (
         "  epochs    10      →  20\n"
         "  model.lr  0.0001  →  0.001"
     )
 
 
-def test_format_diff_renders_missing_sentinel() -> None:
+def test_format_diff_added_row_uses_plus_prefix_no_arrow() -> None:
+    out = format_diff({"experiment.id": (MISSING, "abc123")}, color=False)
+    assert out == "+ experiment.id  'abc123'"
+    assert "→" not in out
+    assert "MISSING" not in out
+
+
+def test_format_diff_removed_row_uses_minus_prefix_no_arrow() -> None:
+    out = format_diff({"model.depth": (12, MISSING)}, color=False)
+    assert out == "- model.depth  12"
+    assert "→" not in out
+    assert "MISSING" not in out
+
+
+def test_format_diff_mixed_rows() -> None:
     diff = {
+        "epochs": (10, 20),
         "added": (MISSING, "new"),
         "removed": ("gone", MISSING),
     }
-    out = format_diff(diff, color=False)
-    assert "<MISSING>" in out
-    # Both sides represented per row.
-    assert out.count("<MISSING>") == 2
+    lines = format_diff(diff, color=False).split("\n")
+    assert lines[0].startswith("  ") and "→" in lines[0]
+    assert lines[1].startswith("+ ")
+    assert lines[2].startswith("- ")
 
 
 def test_format_diff_color_applies_ansi_codes() -> None:
@@ -195,9 +211,16 @@ def test_format_diff_color_off_strips_ansi() -> None:
     assert "\033[" not in out
 
 
-def test_format_diff_missing_uses_dim_when_colored() -> None:
+def test_format_diff_added_row_is_green_when_colored() -> None:
     out = format_diff({"k": (MISSING, "v")}, color=True)
-    assert "\033[2m" in out   # dim for MISSING
+    assert "\033[32m" in out   # green for the added value
+    assert "\033[31m" not in out
+
+
+def test_format_diff_removed_row_is_red_when_colored() -> None:
+    out = format_diff({"k": ("v", MISSING)}, color=True)
+    assert "\033[31m" in out   # red for the removed value
+    assert "\033[32m" not in out
 
 
 # ---- ConfigModel.format_diff / print_diff ----------------------------------

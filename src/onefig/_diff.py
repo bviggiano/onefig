@@ -5,7 +5,6 @@ from typing import Any
 
 _RED = "\033[31m"
 _GREEN = "\033[32m"
-_DIM = "\033[2m"
 _RESET = "\033[0m"
 
 
@@ -62,9 +61,13 @@ def format_diff(
 ) -> str:
     """Render a diff dict as an aligned, human-readable string.
 
-    Layout is ``key  old  →  new`` with the columns padded to a common
-    width. ANSI red marks the ``old`` side, green marks the ``new`` side;
-    :data:`MISSING` renders dimmed.
+    Layout follows unified-diff conventions:
+
+    * Changed rows show ``  key  old  →  new`` with red old / green new.
+    * Added rows (key only on the new side) show ``+ key  new`` in green
+      and have no arrow.
+    * Removed rows (key only on the old side) show ``- key  old`` in red
+      and have no arrow.
 
     Args:
         diff: Mapping from dotted path to ``(old, new)`` tuple (the
@@ -82,30 +85,34 @@ def format_diff(
     if color is None:
         color = sys.stdout.isatty()
 
-    raw_olds = [_format_value(old) for old, _ in diff.values()]
-    raw_news = [_format_value(new) for _, new in diff.values()]
-
     key_width = max(len(k) for k in diff)
-    old_width = max(len(s) for s in raw_olds)
+    # Compute the old-column width only over rows that have both sides;
+    # added/removed rows don't share that column.
+    changed_olds = [
+        repr(old)
+        for old, new in diff.values()
+        if old is not MISSING and new is not MISSING
+    ]
+    old_width = max((len(s) for s in changed_olds), default=0)
 
     lines: list[str] = []
-    for (key, (old, new)), old_str, new_str in zip(diff.items(), raw_olds, raw_news):
-        old_padded = old_str.ljust(old_width)
-        old_styled = _style(old_padded, _RED, old, enabled=color)
-        new_styled = _style(new_str, _GREEN, new, enabled=color)
-        lines.append(f"  {key.ljust(key_width)}  {old_styled}  →  {new_styled}")
+    for key, (old, new) in diff.items():
+        key_col = key.ljust(key_width)
+        if old is MISSING:
+            new_styled = _style(repr(new), _GREEN, enabled=color)
+            lines.append(f"+ {key_col}  {new_styled}")
+        elif new is MISSING:
+            old_styled = _style(repr(old), _RED, enabled=color)
+            lines.append(f"- {key_col}  {old_styled}")
+        else:
+            old_padded = repr(old).ljust(old_width)
+            old_styled = _style(old_padded, _RED, enabled=color)
+            new_styled = _style(repr(new), _GREEN, enabled=color)
+            lines.append(f"  {key_col}  {old_styled}  →  {new_styled}")
     return "\n".join(lines)
 
 
-def _format_value(value: Any) -> str:
-    if value is MISSING:
-        return "<MISSING>"
-    return repr(value)
-
-
-def _style(text: str, color_code: str, value: Any, *, enabled: bool) -> str:
+def _style(text: str, color_code: str, *, enabled: bool) -> str:
     if not enabled:
         return text
-    # MISSING dims; everything else uses its side's color.
-    code = _DIM if value is MISSING else color_code
-    return f"{code}{text}{_RESET}"
+    return f"{color_code}{text}{_RESET}"
