@@ -11,6 +11,7 @@ repo root so the relative paths to `examples/configs/train.yaml` resolve.
 | [`04_freeze_and_snapshot.py`](04_freeze_and_snapshot.py) | `freeze()`, `save_yaml()`, `commit_hash`. |
 | [`05_argparse.py`](05_argparse.py) | Argparse-flavored overrides via `update_from_args`. |
 | [`06_completion.py`](06_completion.py) | Shell tab completion for `bash`, `zsh`, and `fish`. |
+| [`07_env_overrides.py`](07_env_overrides.py) | Environment variable overrides via `update_from_env`. |
 | [`notebook.ipynb`](notebook.ipynb) | A guided tour of the same APIs in notebook form. |
 
 Quick try:
@@ -22,4 +23,5 @@ python examples/03_help.py --help
 python examples/04_freeze_and_snapshot.py epochs=3 lr=0.01
 python examples/05_argparse.py --epochs 20 --lr 0.001
 python examples/06_completion.py --onefig-completions opt
+MYAPP_EPOCHS=20 MYAPP_MODEL__NAME=bert python examples/07_env_overrides.py
 ```
