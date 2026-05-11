@@ -81,6 +81,8 @@ python script.py lr=0.001 --show          # print resolved config and exit
 python script.py --help                   # list every overridable field
 ```
 
+> Runnable demo: [`examples/01_basic.py`](examples/01_basic.py).
+
 ## Shell tab completion
 
 > *"Not all those who wander are lost."*
@@ -131,6 +133,8 @@ python examples/06_completion.py opt<TAB>   # → optimizer.kind=  optimizer.lr=
 python examples/06_completion.py l<TAB>     # → lr=
 python examples/06_completion.py --<TAB>    # → --show  --help
 ```
+
+> Runnable demo: [`examples/06_completion.py`](examples/06_completion.py).
 
 **Preview before sourcing.** Both subcommands print their snippet to
 stdout, so you can inspect what would be appended to your rc file, or
@@ -245,6 +249,8 @@ takes precedence when both are provided. The same output is available as
 `cfg.print_help()` (or `cfg.format_help()` for the string), which is
 useful when integrating with an argparse-driven entry point.
 
+> Runnable demo: [`examples/03_help.py`](examples/03_help.py).
+
 ### CLI overrides without argparse
 
 `update_from_cli` parses `key=value` tokens directly from `sys.argv`, so no
@@ -276,6 +282,9 @@ args = parser.parse_args()
 cfg = TrainCfg.load("train")
 cfg.update_from_args(args)                 # None values are skipped by default
 ```
+
+> Runnable demos: [`examples/02_cli_overrides.py`](examples/02_cli_overrides.py),
+> [`examples/05_argparse.py`](examples/05_argparse.py).
 
 ### Environment variable overrides
 
@@ -313,9 +322,11 @@ cfg.update_from_cli()
 cfg.freeze()
 ```
 
+> Runnable demo: [`examples/07_env_overrides.py`](examples/07_env_overrides.py).
+
 ### Snapshot the resolved config alongside the experiment
 
-> *"The road goes ever on and on"* — make sure you can find your way back.
+> *"The road goes ever on and on"*
 
 ```python
 cfg = TrainCfg.load("train")
@@ -326,6 +337,8 @@ run_dir = Path("runs") / cfg.config_name
 run_dir.mkdir(parents=True, exist_ok=True)
 cfg.save_yaml(run_dir / "config.yaml")     # round-trippable via TrainCfg.load(...)
 ```
+
+> Runnable demo: [`examples/04_freeze_and_snapshot.py`](examples/04_freeze_and_snapshot.py).
 
 ### Diff configs
 
@@ -396,6 +409,8 @@ run.print_diff_from_defaults()
 
 Color is on by default when stdout is a tty; pass `color=False` to
 force it off (or `color=True` to keep it on when piping to a file).
+
+> Runnable demo: [`examples/09_diff.py`](examples/09_diff.py).
 
 ### Capture the running code's commit hash
 
@@ -496,6 +511,8 @@ Mechanics:
   the whole chain is merged, so a parent can reference a key that only
   a child supplies.
 
+> Runnable demo: [`examples/08_extends.py`](examples/08_extends.py).
+
 ### Cross-file YAML interpolation
 
 ```yaml
@@ -522,6 +539,8 @@ cfg.epochs = 99            # raises FrozenConfigError
 cfg.model.lr = 0.5         # also raises (freeze is recursive)
 print(cfg.epochs)          # reads always work
 ```
+
+> Runnable demo: [`examples/04_freeze_and_snapshot.py`](examples/04_freeze_and_snapshot.py).
 
 ## Features
 
