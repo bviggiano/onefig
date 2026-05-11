@@ -1,0 +1,13 @@
+# Shared base config used by examples/08_extends.py via extends:.
+run_name: ${model.name}-ep${epochs}
+epochs: 10
+model:
+  name: tiny-bert
+  hidden_size: 256
+  num_layers: 6
+optimizer:
+  kind: adamw
+  lr: 0.0005
+  weight_decay: 0.01
+tags:
+  - baseline
