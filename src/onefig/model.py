@@ -17,6 +17,7 @@ from onefig._completion import (
     python_completion_script,
     shell_script,
 )
+from onefig._diff import compute_diff
 from onefig._env import parse_env
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
@@ -463,6 +464,70 @@ class ConfigModel(BaseModel):
             indexed (``"tags.0"``, ``"layers.0.size"``).
         """
         return flatten(self.model_dump())
+
+    def diff(
+        self, other: "ConfigModel | dict[str, Any]"
+    ) -> dict[str, tuple[Any, Any]]:
+        """Diff this config's leaves against another config or dict.
+
+        Returns ``{dotted_path: (self_value, other_value)}`` for every leaf
+        that differs. Keys present on only one side use the
+        :data:`onefig.MISSING` sentinel for the absent side.
+
+        Convenient for experiment logs and PR-style "what changed in this
+        run" output. Pairs naturally with :meth:`to_flat_dict`-driven
+        loggers (W&B / MLflow): hand the result to your logger of choice
+        and you have a one-glance summary of the run's deviations from a
+        baseline.
+
+        Args:
+            other: Either another :class:`ConfigModel` (typically the same
+                type as ``self``) or a ``dict``. Dicts may be nested or
+                flat — both are accepted.
+
+        Returns:
+            Ordered mapping of changed leaf paths to ``(old, new)`` tuples.
+            Empty when the configs agree.
+
+        Raises:
+            TypeError: If ``other`` is neither a ConfigModel nor a dict.
+        """
+        if isinstance(other, ConfigModel):
+            other_flat = other.to_flat_dict()
+        elif isinstance(other, dict):
+            # `flatten` is a no-op on already-flat dicts (scalar values
+            # are passed through), so accept either shape.
+            other_flat = flatten(other)
+        else:
+            raise TypeError(
+                f"diff() expected a ConfigModel or dict, got {type(other).__name__}."
+            )
+        return compute_diff(self.to_flat_dict(), other_flat)
+
+    def diff_from_defaults(self) -> dict[str, tuple[Any, Any]]:
+        """Diff this config against a default-constructed instance of its type.
+
+        Useful for surfacing which fields a run actually overrode versus
+        what the schema would have produced on its own.
+
+        Returns:
+            Ordered mapping of changed leaf paths to ``(default, current)``
+            tuples. Empty when the config matches its schema defaults.
+
+        Raises:
+            ValueError: If the config class has required fields with no
+                defaults (so a default instance can't be built). Use
+                :meth:`diff` against an explicit baseline instead.
+        """
+        try:
+            default = type(self)()
+        except Exception as exc:
+            raise ValueError(
+                f"{type(self).__name__} has required fields with no defaults, "
+                "so diff_from_defaults() can't build a baseline. Use "
+                "cfg.diff(other_cfg) against an explicit baseline instead."
+            ) from exc
+        return default.diff(self)
 
     def save_yaml(self, path: str | Path) -> None:
         """Serialize this config to YAML.
