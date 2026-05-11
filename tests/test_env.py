@@ -153,7 +153,9 @@ def test_update_from_env_bool_coercion() -> None:
     assert cfg.debug is True
 
 
-def test_update_from_env_defaults_to_os_environ(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_from_env_defaults_to_os_environ(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("MYAPP_EPOCHS", "42")
     cfg = Cfg()
     cfg.update_from_env("MYAPP_")
