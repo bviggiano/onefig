@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import sys
 from argparse import Namespace
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ from onefig._completion import (
     python_completion_script,
     shell_script,
 )
+from onefig._env import parse_env
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
@@ -191,6 +194,60 @@ class ConfigModel(BaseModel):
         if skip_none:
             raw = {k: v for k, v in raw.items() if v is not None}
         apply_overrides(self, raw, strict=strict)
+
+    def update_from_env(
+        self,
+        prefix: str,
+        *,
+        delimiter: str = "__",
+        case_sensitive: bool = False,
+        environ: Mapping[str, str] | None = None,
+        strict: bool = True,
+    ) -> None:
+        """Apply overrides from process environment variables.
+
+        Reads every env var that starts with ``prefix``, strips it, splits
+        the remainder on ``delimiter`` to address nested fields, and feeds
+        the result through the same override engine that powers
+        :meth:`update_from_cli` (so leaf-key shortcuts and type validation
+        behave identically).
+
+        For example, with ``prefix="MYAPP_"``:
+          * ``MYAPP_EPOCHS=20`` → ``cfg.epochs = 20``
+          * ``MYAPP_MODEL__LR=0.001`` → ``cfg.model.lr = 0.001``
+          * ``MYAPP_LR=0.001`` → resolves to ``cfg.model.lr`` if the leaf
+            is unambiguous (otherwise raises).
+
+        Values are best-effort JSON-coerced (``5`` → int, ``true`` → bool,
+        ``[1,2]`` → list, ...) before Pydantic re-validates at assignment.
+
+        Args:
+            prefix: Required prefix to scope which env vars are consumed.
+                Pass ``""`` to read every variable (rarely what you want).
+            delimiter: Substring that separates nested-field segments
+                inside an env var name. Defaults to ``"__"``, matching the
+                pydantic-settings convention.
+            case_sensitive: If ``False`` (default), keys are lowercased
+                after stripping the prefix. Set ``True`` for schemas with
+                mixed-case field names.
+            environ: Mapping to read from. Defaults to :data:`os.environ`.
+                Useful in tests.
+            strict: If ``True`` (default), unknown keys raise.
+
+        Raises:
+            ValueError: For malformed env var names (empty key segments),
+                ambiguous leaf keys, or (when ``strict``) unknown keys.
+            pydantic.ValidationError: If a value fails type validation at
+                the destination field.
+        """
+        env = os.environ if environ is None else environ
+        overrides = parse_env(
+            env,
+            prefix=prefix,
+            delimiter=delimiter,
+            case_sensitive=case_sensitive,
+        )
+        apply_overrides(self, overrides, strict=strict)
 
     def update_from_cli(
         self,
