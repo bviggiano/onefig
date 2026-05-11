@@ -5,10 +5,14 @@
 [![CI](https://github.com/bviggiano/onefig/actions/workflows/ci.yml/badge.svg)](https://github.com/bviggiano/onefig/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Memes](https://img.shields.io/badge/memes-watch-blueviolet)](#memes)
 
 ```bash
 pip install onefig
 ```
+
+> OPTIONAL: One-time TAB completion setup: see [Shell tab completion](#shell-tab-completion).
+
 ![hero.png](hero.png)
 
 A simple, typed YAML config system for Python that tries to unite the best aspects of various config libaries into one API.
@@ -49,7 +53,7 @@ model:
   lr: 0.001
 ```
 
-Wire up a script:
+Use the config in a script:
 
 ```python
 from onefig import ConfigModel
@@ -77,6 +81,91 @@ python script.py lr=0.001 --show          # print resolved config and exit
 python script.py --help                   # list every overridable field
 ```
 
+## Shell tab completion
+
+> *"Not all those who wander are lost."*
+
+Installing onefig adds an `onefig` console command with a one-time
+install helper for shell tab completion. Follow the steps below to set
+it up.
+
+**1. Install onefig.**
+
+```bash
+pip install onefig
+```
+
+This registers the `onefig` console command on your `$PATH`.
+
+**2. Append the snippet for your shell to its rc file.** This binds
+completion once to `python` itself; every onefig-based script invoked
+via `python script.py` then gets TAB completion automatically. Run
+`echo $SHELL` if you're not sure which shell you're on.
+
+```bash
+# bash (Linux default, older macOS)
+onefig install-python-completion bash >> ~/.bashrc
+source ~/.bashrc
+```
+
+```bash
+# zsh (macOS default since Catalina)
+onefig install-python-completion zsh >> ~/.zshrc
+source ~/.zshrc
+```
+
+```bash
+# fish
+onefig install-python-completion fish >> ~/.config/fish/config.fish
+source ~/.config/fish/config.fish
+```
+
+> The shell arg passed to `onefig` *must* match the rc file you append
+> to. The bash snippet uses bash builtins like `complete -F`, which
+> aren't available in zsh; the zsh snippet uses `compdef` / `compadd`.
+
+**3. Try it.**
+
+```bash
+python examples/06_completion.py opt<TAB>   # → optimizer.kind=  optimizer.lr=
+python examples/06_completion.py l<TAB>     # → lr=
+python examples/06_completion.py --<TAB>    # → --show  --help
+```
+
+**Preview before sourcing.** Both subcommands print their snippet to
+stdout, so you can inspect what would be appended to your rc file, or
+eval it for a one-shot test in the current shell only:
+
+```bash
+onefig install-python-completion bash           # print only
+eval "$(onefig install-python-completion bash)" # one-shot in current shell
+```
+
+**How it works.** The completion list contains every overridable full
+dotted path (suffixed with `=`), every unambiguous leaf-name shortcut,
+and the special flags `--show`, `--help`, `-h`. Ambiguous leaves are
+deliberately omitted so users aren't offered a shortcut the override
+engine would refuse. The `python`-bound wrapper finds the first `.py`
+argument on the command line, and before invoking the script it greps
+the file for the literal word `onefig`. If the script doesn't reference
+onefig, the wrapper returns silently — your TAB key is never going to
+execute a random Python script with side effects at import time. For
+onefig scripts, the wrapper invokes
+`python <that script> --onefig-completions <prefix>` and uses the
+output as the candidate list; the `--onefig-completions` flag is
+intercepted inside `update_from_cli()` before `main()` runs, so even
+the onefig script itself doesn't execute any of its own logic.
+
+> If your script gets its `ConfigModel` through a re-export (e.g.
+> `from mypkg.configs import TrainCfg`) and never mentions `onefig`
+> directly, the grep gate will skip it. Add a `# onefig` comment
+> anywhere in the file to opt in.
+
+The same install snippet is also available as a flag on any onefig
+script (``--onefig-install-python-completion <shell>``), which is
+useful when the ``onefig`` command isn't on the user's ``$PATH`` (e.g.
+inside an application virtualenv).
+
 ## Common patterns
 
 > *"All we have to decide is what to do with the time that is given us."*
@@ -85,11 +174,12 @@ python script.py --help                   # list every overridable field
 
 `update_from_cli` intercepts `--help` / `-h` and prints every overridable
 field (with its type, default, current value, and docstring) before exiting.
-No argparse, no manual help string to maintain; the schema is the docs.
-Each nested `ConfigModel` gets its own boxed sub-panel; entries show only
-the leaf name when it's an unambiguous CLI shortcut, and fall back to the
-full dotted path when the leaf is ambiguous (because that's the only form
-the override engine would accept):
+The help text is generated directly from the `ConfigModel` schema, so it
+stays accurate without manual maintenance. Each nested `ConfigModel`
+renders as its own sub-panel. Entries show the leaf name alone when that
+name resolves to a single field, and the full dotted path otherwise (which
+matches the only form the override engine accepts when a leaf is
+ambiguous):
 
 ```python
 from typing import Literal
@@ -148,34 +238,33 @@ description (it wraps to the next indented line if it overflows). Run with
 │       Learning rate. (default: 0.0001)                                               │
 ```
 
-`Literal[...]` choices and `Enum` members are surfaced inline so users can
-discover valid values without grepping the schema. Field docstrings (PEP 257)
-populate the descriptions automatically; an explicit
-`Field(description=...)` takes precedence if you'd rather decouple the doc
-from the source. Print the same block manually with `cfg.print_help()` (or
-get the string via `cfg.format_help()`); useful when wiring help into your
-own argparse setup.
+`Literal[...]` choices and `Enum` members are listed inline so users can
+discover valid values from the help output. Field docstrings (PEP 257) are
+used as descriptions automatically; an explicit `Field(description=...)`
+takes precedence when both are provided. The same output is available as
+`cfg.print_help()` (or `cfg.format_help()` for the string), which is
+useful when integrating with an argparse-driven entry point.
 
 ### CLI overrides without argparse
 
-`update_from_cli` parses `key=value` tokens straight from `sys.argv`. No flag
-declarations needed:
+`update_from_cli` parses `key=value` tokens directly from `sys.argv`, so no
+flag declarations are required:
 
 ```python
 cfg = TrainCfg.load("train")
 cfg.update_from_cli()                      # python script.py lr=0.001 epochs=20
 ```
 
-Leaf-key shortcuts work too — onefig resolves `lr` to `model.lr` if it's
-unambiguous:
+Leaf-key shortcuts are also supported: onefig resolves `lr` to `model.lr`
+when the leaf name is unambiguous in the schema:
 
 ```bash
 python script.py lr=0.001                  # → cfg.model.lr = 0.001
 ```
 
-Need argparse instead (e.g. for help text, custom flag types, sweep tooling)?
-Use `update_from_args` — same override engine, same leaf-key trick, takes a
-parsed Namespace:
+For argparse-driven setups (custom flag types, integration with sweep
+tooling, etc.), `update_from_args` accepts a parsed `Namespace` and uses
+the same override engine and leaf-key resolution:
 
 ```python
 import argparse
@@ -289,9 +378,12 @@ print(cfg.epochs)          # reads always work
 - **Schema-aware `--help`** — `python script.py --help` prints every
   overridable field with its type, default, current value, and docstring.
   `Literal` / `Enum` choices are surfaced inline.
-- **Smart leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` if it's
-  unambiguous. Conflicts raise with a clear message.
-- **Round-trippable** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
+- **Shell tab completion** — `onefig install-python-completion <shell>`
+  enables TAB completion of every overridable key for any onefig script
+  invoked via `python`. Supports `bash`, `zsh`, and `fish`.
+- **Leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` when the
+  leaf name is unambiguous; conflicts raise with a clear message.
+- **Round-trip serialization** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
   `cfg.to_flat_dict()` ↔ `Cfg.from_flat_dict()`.
 - **Recursive freeze** — `cfg.freeze()` makes the whole tree immutable.
 - **Tree display** — `cfg.display()` prints an ASCII tree, no `rich` dep.
@@ -329,14 +421,24 @@ cfg.save_yaml("snapshot.yaml")              # write YAML to disk
 cfg.display(name="MyRun")                    # print ASCII tree to stdout
 cfg.print_help()                             # schema-aware help (also via --help)
 cfg.format_help()                            # same, returned as a string
+
+# Shell completion
+cfg.completion_candidates()                  # list of completion tokens
+cfg.python_wrapper_completion_script("bash") # install snippet for `python <script>.py`
+```
+
+The library installs a console command:
+
+```bash
+onefig install-python-completion <bash|zsh|fish>      # one-time, global
 ```
 
 ## Examples
 
-Runnable demos live in [`examples/`](examples/) — one Python script per
-feature plus a guided notebook. Start with
-[`examples/01_basic.py`](examples/01_basic.py) and see
-[`examples/README.md`](examples/README.md) for the full menu.
+Runnable scripts live in [`examples/`](examples/), with one Python file per
+feature plus a notebook walkthrough. Start with
+[`examples/01_basic.py`](examples/01_basic.py); the complete list is in
+[`examples/README.md`](examples/README.md).
 
 ## License
 
@@ -344,6 +446,18 @@ MIT
 
 ---
 
+## Memes
+
 <p align="center">
-  <img src="assets/lotr/gandalf-nod.gif" width="80" alt="Gandalf nod">
+  <a href="https://www.youtube.com/watch?v=Y5NTgZA-xWE">
+    <img src="assets/lotr/one-ring.png" width="80" alt="The One Ring">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://youtube.com/shorts/u5sLlWVtC68">
+    <img src="assets/lotr/gandalf-nod.gif" width="80" alt="Gandalf nod">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://www.youtube.com/watch?v=uE-1RPDqJAY">
+    <img src="assets/lotr/theyre-taking-the-hobbits-to-isengard.gif" width="80" alt="They're taking the hobbits to Isengard">
+  </a>
 </p>
