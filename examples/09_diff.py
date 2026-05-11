@@ -1,9 +1,21 @@
-"""Diff configs to surface what actually changed.
+"""Visualize config diffs.
 
-``cfg.diff(other)`` returns ``{dotted_path: (self_value, other_value)}``
-for every leaf that differs. ``cfg.diff_from_defaults()`` compares the
-current config against a default-constructed instance of its type.
-Useful for run logs and PR-style "what changed in this run" output.
+onefig ships two complementary visualizations, one per use case:
+
+* ``cfg.print_diff(other)`` is a **side-by-side comparison**. Every
+  changed leaf renders as ``old → new`` with red on the old side and
+  green on the new. Keys present on only one side render with a dimmed
+  ``<MISSING>`` placeholder.
+
+* ``cfg.print_diff_from_defaults()`` is a **config snapshot with
+  override highlights**. Every field shows up. Overridden fields render
+  as ``default → current`` (red → green); fields still at their default
+  render alone in green with no arrow. One-glance "what does this run
+  look like, and where did I deviate?".
+
+Both also have ``format_*`` siblings that return strings (useful for
+logging or piping into a file). Color auto-detects via
+``sys.stdout.isatty()`` and can be forced on or off with ``color=``.
 
 Run from the repo root:
 
@@ -36,6 +48,10 @@ class TrainCfg(ConfigModel):
     tags: list[str] = []
 
 
+def _section(title: str) -> None:
+    print(f"\n\033[1m{title}\033[0m")  # bold
+
+
 def main() -> None:
     baseline = TrainCfg()
     run = TrainCfg(
@@ -44,23 +60,29 @@ def main() -> None:
         optimizer=OptimizerCfg(lr=1e-3),
     )
 
-    # 1) Visualize what `run` changed vs. baseline. Call it on `baseline`
-    #    so the arrow reads "baseline → run" — i.e. "this is what changed".
-    print("baseline.print_diff(run):")
+    # 1) Side-by-side comparison of two configs.
+    _section("baseline.print_diff(run)  — side-by-side comparison")
     baseline.print_diff(run)
 
-    # 2) Same idea framed against schema defaults — single-call form.
-    print("\nrun.print_diff_from_defaults():")
+    # 2) Snapshot with override highlights — every field shown,
+    #    overridden ones get the arrow.
+    _section("run.print_diff_from_defaults()  — snapshot with overrides")
     run.print_diff_from_defaults()
 
-    # 3) Cross-schema diff: dict misses a key the config has, and adds one
-    #    the config doesn't. <MISSING> stands in for the absent side.
+    # 3) Cross-schema diff: partial dict. <MISSING> stands in for the
+    #    absent side in either direction.
     partial = {"epochs": 99, "experiment.id": "abc123"}
-    print("\nbaseline.print_diff(partial_dict):")
+    _section("baseline.print_diff(partial_dict)  — cross-schema with <MISSING>")
     baseline.print_diff(partial)
 
-    # 4) Programmatic access: the raw dict is still what diff() returns.
-    print("\nbaseline.diff(run) as a plain dict:")
+    # 4) Strings for logging instead of stdout.
+    _section("run.format_diff_from_defaults()  — string form for logging")
+    text = run.format_diff_from_defaults(color=False)  # plain text, no ANSI
+    for line in text.split("\n"):
+        print(f"  log| {line}")
+
+    # 5) The raw diff dict is still available for programmatic use.
+    _section("baseline.diff(run)  — raw dict for programmatic use")
     print(f"  {baseline.diff(run)}")
 
 
