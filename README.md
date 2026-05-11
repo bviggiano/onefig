@@ -360,6 +360,23 @@ extra/missing keys) is well-defined. The result is an ordered dict
 (self's keys first, in their declared order), so output is stable
 across runs.
 
+For human-readable output, `print_diff` and `format_diff` render the
+same data as an aligned table with `old → new` arrows, ANSI red on the
+old side, green on the new side, and dimmed `<MISSING>` for any keys
+present on only one side:
+
+```python
+baseline.print_diff(run)
+# epochs            10           →  20
+# model.name        'tiny-bert'  →  'bert-large'
+# model.lr          0.0001       →  0.001
+
+run.print_diff_from_defaults()    # same shape, against schema defaults
+```
+
+Color is on by default when stdout is a tty; pass `color=False` to force
+it off (or `color=True` to keep it on when piping to a file).
+
 ### Capture the running code's commit hash
 
 Every config automatically captures the current `git HEAD` hash on
@@ -549,6 +566,11 @@ cfg.save_yaml("snapshot.yaml")              # write YAML to disk
 # Diffing
 cfg.diff(other_cfg_or_dict)                  # {"model.lr": (0.001, 0.01), ...}
 cfg.diff_from_defaults()                     # diff vs type(cfg)()
+cfg.print_diff(other_cfg_or_dict)            # aligned, color old → new
+cfg.print_diff_from_defaults()               # same, against schema defaults
+cfg.format_diff(other)                       # string form (for logging)
+cfg.format_diff_from_defaults()              # string form
+
 
 # Display
 cfg.display(name="MyRun")                    # print ASCII tree to stdout
