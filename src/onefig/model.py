@@ -17,7 +17,7 @@ from onefig._completion import (
     python_completion_script,
     shell_script,
 )
-from onefig._diff import compute_diff, format_diff
+from onefig._diff import compute_diff, format_against_defaults, format_diff
 from onefig._env import parse_env
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
@@ -561,12 +561,36 @@ class ConfigModel(BaseModel):
         print(self.format_diff(other, color=color))
 
     def format_diff_from_defaults(self, *, color: bool | None = None) -> str:
-        """Render :meth:`diff_from_defaults` as an aligned string.
+        """Render a snapshot of this config with override highlights.
 
-        Arrows point ``default → current``, so each row reads as "this
-        field was overridden from its default to the listed value".
+        Unlike :meth:`format_diff`, this shows *every* field — not just
+        the ones that diverge from defaults. Unchanged fields appear as a
+        single green value; overridden fields show ``default → current``
+        with the default in red and the current value in green. Acts as
+        a one-glance "what does this run look like, and where did I
+        deviate from defaults?" report.
+
+        Args:
+            color: ``True`` / ``False`` to force ANSI on or off. ``None``
+                (default) auto-detects via ``sys.stdout.isatty()``.
+
+        Raises:
+            ValueError: If the config class has required fields with no
+                defaults (so a default instance can't be built).
         """
-        return format_diff(self.diff_from_defaults(), color=color)
+        try:
+            default = type(self)()
+        except Exception as exc:
+            raise ValueError(
+                f"{type(self).__name__} has required fields with no defaults, "
+                "so format_diff_from_defaults() can't build a baseline. Use "
+                "cfg.format_diff(other_cfg) against an explicit baseline."
+            ) from exc
+        return format_against_defaults(
+            self.to_flat_dict(),
+            default.to_flat_dict(),
+            color=color,
+        )
 
     def print_diff_from_defaults(self, *, color: bool | None = None) -> None:
         """Print :meth:`format_diff_from_defaults` to stdout."""
