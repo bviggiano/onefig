@@ -277,6 +277,42 @@ cfg = TrainCfg.load("train")
 cfg.update_from_args(args)                 # None values are skipped by default
 ```
 
+### Environment variable overrides
+
+> *"I will take the Ring, though I do not know the way."*
+
+`update_from_env` reads overrides straight from the process environment,
+using the same override engine as the CLI path (leaf-key shortcuts,
+ambiguity detection, Pydantic re-validation):
+
+```python
+cfg = TrainCfg.load("train")
+cfg.update_from_env("MYAPP_")              # MYAPP_EPOCHS=20 → cfg.epochs = 20
+cfg.update_from_cli()                       # CLI wins over env
+```
+
+Nested fields are addressed with `__` (POSIX-legal substitute for `.`):
+
+```bash
+MYAPP_MODEL__LR=0.001 python script.py     # → cfg.model.lr = 0.001
+MYAPP_LR=0.001        python script.py     # leaf shortcut → cfg.model.lr
+```
+
+Values are JSON-coerced (`true`, `5`, `[1,2]`, ...) before validation,
+matching CLI behavior. Pass `case_sensitive=True`, a custom `delimiter`,
+or `strict=False` if you need to deviate from the defaults; pass
+`environ=` in tests to feed a synthetic mapping.
+
+Compose freely into the precedence chain you want, e.g.
+YAML → env → CLI:
+
+```python
+cfg = TrainCfg.load("train")
+cfg.update_from_env("MYAPP_")
+cfg.update_from_cli()
+cfg.freeze()
+```
+
 ### Snapshot the resolved config alongside the experiment
 
 > *"The road goes ever on and on"* — make sure you can find your way back.
@@ -375,6 +411,9 @@ print(cfg.epochs)          # reads always work
   unknown fields rejected (`extra="forbid"`).
 - **Two CLI override paths** — argparse-free `update_from_cli` for quick
   scripts, or `update_from_args` for custom argparse setups.
+- **Env-var overrides** — `update_from_env("MYAPP_")` reads
+  `MYAPP_MODEL__LR=0.001`-style env vars through the same override
+  engine. Composes naturally with YAML → env → CLI precedence.
 - **Schema-aware `--help`** — `python script.py --help` prints every
   overridable field with its type, default, current value, and docstring.
   `Literal` / `Enum` choices are surfaced inline.
@@ -403,6 +442,7 @@ cfg = MyCfg.from_flat_dict({"a.b": 1})      # validate from flat dotted dict
 # CLI overrides
 cfg.update_from_cli(["lr=0.5"])              # key=value tokens (defaults to sys.argv[1:])
 cfg.update_from_args(args)                   # pre-parsed argparse Namespace
+cfg.update_from_env("MYAPP_")                # MYAPP_MODEL__LR=0.001 → cfg.model.lr
 
 # Mutation control
 cfg.freeze()                                 # recursive immutable mode
