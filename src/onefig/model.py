@@ -17,7 +17,7 @@ from onefig._completion import (
     python_completion_script,
     shell_script,
 )
-from onefig._diff import compute_diff
+from onefig._diff import compute_diff, format_diff
 from onefig._env import parse_env
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
@@ -528,6 +528,49 @@ class ConfigModel(BaseModel):
                 "cfg.diff(other_cfg) against an explicit baseline instead."
             ) from exc
         return default.diff(self)
+
+    def format_diff(
+        self,
+        other: ConfigModel | dict[str, Any],
+        *,
+        color: bool | None = None,
+    ) -> str:
+        """Render :meth:`diff` against ``other`` as an aligned string.
+
+        Layout is ``key  old  →  new`` with ANSI red on the old side,
+        green on the new side, and dimmed ``<MISSING>`` for keys present
+        on only one side. Same input contract as :meth:`diff`.
+
+        Args:
+            other: A :class:`ConfigModel` or ``dict`` to compare against.
+            color: ``True`` / ``False`` to force ANSI on or off. ``None``
+                (default) auto-detects via ``sys.stdout.isatty()``.
+
+        Returns:
+            A multi-line string ready to print.
+        """
+        return format_diff(self.diff(other), color=color)
+
+    def print_diff(
+        self,
+        other: ConfigModel | dict[str, Any],
+        *,
+        color: bool | None = None,
+    ) -> None:
+        """Print :meth:`format_diff` to stdout."""
+        print(self.format_diff(other, color=color))
+
+    def format_diff_from_defaults(self, *, color: bool | None = None) -> str:
+        """Render :meth:`diff_from_defaults` as an aligned string.
+
+        Arrows point ``default → current``, so each row reads as "this
+        field was overridden from its default to the listed value".
+        """
+        return format_diff(self.diff_from_defaults(), color=color)
+
+    def print_diff_from_defaults(self, *, color: bool | None = None) -> None:
+        """Print :meth:`format_diff_from_defaults` to stdout."""
+        print(self.format_diff_from_defaults(color=color))
 
     def save_yaml(self, path: str | Path) -> None:
         """Serialize this config to YAML.

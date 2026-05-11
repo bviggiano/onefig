@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from onefig import MISSING, ConfigModel
-from onefig._diff import _MissingType, compute_diff
+from onefig._diff import _MissingType, compute_diff, format_diff
 
 
 class Sub(ConfigModel):
@@ -149,3 +149,92 @@ def test_diff_from_defaults_raises_when_required_fields_missing() -> None:
     cfg = HasRequired(name="explicit")
     with pytest.raises(ValueError, match="required fields"):
         cfg.diff_from_defaults()
+
+
+# ---- format_diff -----------------------------------------------------------
+
+
+def test_format_diff_empty_returns_message() -> None:
+    assert format_diff({}, color=False) == "(no changes)"
+    assert format_diff({}, color=False, empty_message="nope") == "nope"
+
+
+def test_format_diff_basic_alignment() -> None:
+    diff = {
+        "epochs": (10, 20),
+        "model.lr": (1e-4, 1e-3),
+    }
+    out = format_diff(diff, color=False)
+    # Keys padded to common width; arrow separator.
+    assert out == (
+        "  epochs    10      →  20\n"
+        "  model.lr  0.0001  →  0.001"
+    )
+
+
+def test_format_diff_renders_missing_sentinel() -> None:
+    diff = {
+        "added": (MISSING, "new"),
+        "removed": ("gone", MISSING),
+    }
+    out = format_diff(diff, color=False)
+    assert "<MISSING>" in out
+    # Both sides represented per row.
+    assert out.count("<MISSING>") == 2
+
+
+def test_format_diff_color_applies_ansi_codes() -> None:
+    out = format_diff({"epochs": (10, 20)}, color=True)
+    assert "\033[31m" in out   # red for old
+    assert "\033[32m" in out   # green for new
+    assert "\033[0m" in out    # reset
+
+
+def test_format_diff_color_off_strips_ansi() -> None:
+    out = format_diff({"epochs": (10, 20)}, color=False)
+    assert "\033[" not in out
+
+
+def test_format_diff_missing_uses_dim_when_colored() -> None:
+    out = format_diff({"k": (MISSING, "v")}, color=True)
+    assert "\033[2m" in out   # dim for MISSING
+
+
+# ---- ConfigModel.format_diff / print_diff ----------------------------------
+
+
+def test_format_diff_method_round_trips_via_diff() -> None:
+    a = Cfg(epochs=10)
+    b = Cfg(epochs=20)
+    assert a.format_diff(b, color=False) == format_diff(
+        a.diff(b), color=False
+    )
+
+
+def test_print_diff_writes_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
+    a = Cfg(epochs=10)
+    b = Cfg(epochs=20)
+    a.print_diff(b, color=False)
+    captured = capsys.readouterr()
+    assert "epochs" in captured.out
+    assert "10" in captured.out
+    assert "20" in captured.out
+    assert "→" in captured.out
+
+
+def test_format_diff_from_defaults_arrows_point_default_to_current() -> None:
+    cfg = Cfg(epochs=99)
+    out = cfg.format_diff_from_defaults(color=False)
+    # Default 10 → current 99 (arrow reads "was 10, now 99").
+    assert "10" in out and "99" in out
+    assert out.index("10") < out.index("99")
+
+
+def test_print_diff_from_defaults_writes_to_stdout(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = Cfg(epochs=99)
+    cfg.print_diff_from_defaults(color=False)
+    captured = capsys.readouterr()
+    assert "epochs" in captured.out
+    assert "→" in captured.out
