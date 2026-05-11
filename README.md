@@ -307,6 +307,45 @@ available, the working directory isn't a repo, or capture otherwise fails. The
 value is stored on a private attribute, so it stays out of `to_dict()`,
 `to_flat_dict()`, and `save_yaml()` and won't pollute hyperparameter logs.
 
+### Editor autocomplete in YAML
+
+> *"The board is set, the pieces are moving."*
+
+Export your schema as JSON Schema and any editor backed by
+[`yaml-language-server`](https://github.com/redhat-developer/yaml-language-server)
+(VSCode + the [YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml),
+neovim/helix with yamlls, ...) will surface autocomplete, validation, and
+inline docs while editing the YAML — including field docstrings, `Literal`
+choices, and required/default markers.
+
+```python
+TrainCfg.export_json_schema("schemas/train.schema.json")
+```
+
+By default this also merges a `yaml.schemas` mapping into
+`.vscode/settings.json`, so VSCode users get autocomplete with no per-file
+annotation. The glob is derived from the schema filename:
+`train.schema.json` → `["**/train.yaml", "**/train.yml"]`. Pass
+`yaml_glob=` to override:
+
+```python
+TrainCfg.export_json_schema(
+    "schemas/train.schema.json",
+    yaml_glob="configs/train*.yaml",
+)
+```
+
+Pass `register=False` to skip the VSCode wiring and just emit the schema;
+useful in CI, or when you'd rather pin the schema to each YAML with a
+modeline:
+
+```yaml
+# yaml-language-server: $schema=../schemas/train.schema.json
+epochs: 5
+model:
+  name: tiny-bert
+```
+
 ### Hyperparameter logging to W&B / MLflow
 
 ```python
@@ -378,6 +417,10 @@ print(cfg.epochs)          # reads always work
 - **Schema-aware `--help`** — `python script.py --help` prints every
   overridable field with its type, default, current value, and docstring.
   `Literal` / `Enum` choices are surfaced inline.
+- **Editor autocomplete in YAML** — `Cfg.export_json_schema(path)` writes
+  JSON Schema and (by default) wires it into `.vscode/settings.json` so
+  any editor backed by `yaml-language-server` provides autocomplete,
+  validation, and inline docs while editing the YAML.
 - **Shell tab completion** — `onefig install-python-completion <shell>`
   enables TAB completion of every overridable key for any onefig script
   invoked via `python`. Supports `bash`, `zsh`, and `fish`.
@@ -416,6 +459,9 @@ cfg.commit_hash                              # str | None — git HEAD captured 
 cfg.to_dict()                                # nested dict
 cfg.to_flat_dict()                           # {"model.lr": 0.001, ...}
 cfg.save_yaml("snapshot.yaml")              # write YAML to disk
+
+# Editor autocomplete
+MyCfg.export_json_schema("schemas/my.schema.json")  # + VSCode wiring by default
 
 # Display
 cfg.display(name="MyRun")                    # print ASCII tree to stdout

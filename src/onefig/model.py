@@ -20,6 +20,7 @@ from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
 from onefig._overrides import _resolve_keys, _set_dotted, apply_overrides
+from onefig._schema import export_schema
 
 
 class FrozenConfigError(RuntimeError):
@@ -147,6 +148,60 @@ class ConfigModel(BaseModel):
             A validated instance of ``cls``.
         """
         return cls.model_validate(unflatten(flat))
+
+    @classmethod
+    def export_json_schema(
+        cls,
+        path: str | Path,
+        *,
+        register: bool = True,
+        yaml_glob: str | list[str] | None = None,
+        vscode_settings_path: str | Path = ".vscode/settings.json",
+    ) -> Path:
+        """Export this config's schema as JSON Schema for editor autocomplete.
+
+        Writes a JSON Schema derived from the Pydantic model to ``path``.
+        Any editor backed by ``yaml-language-server`` (VSCode + YAML
+        extension, neovim/helix with yamlls, ...) can use it to provide
+        autocomplete, validation, and inline docs while editing the YAML.
+
+        When ``register`` is ``True`` (default), the schema is also wired
+        into ``.vscode/settings.json`` via a ``yaml.schemas`` mapping, so
+        VSCode users get autocomplete without any per-file annotation. For
+        other editors, either keep ``register=True`` and configure your
+        editor manually against the same schema path, or add a
+        ``# yaml-language-server: $schema=<path>`` modeline to the YAML.
+
+        Args:
+            path: Destination ``.json`` path for the schema. Parent
+                directories are created if missing.
+            register: If ``True``, merge a ``yaml.schemas`` entry into
+                ``vscode_settings_path`` so matching YAML files pick up
+                the schema automatically.
+            yaml_glob: One or more file globs for YAML files that should
+                use this schema. When ``None`` (default), derived from the
+                schema filename: ``train.schema.json`` →
+                ``["**/train.yaml", "**/train.yml"]``.
+            vscode_settings_path: Where to write/merge the VSCode settings
+                file. Defaults to ``.vscode/settings.json`` in the current
+                working directory.
+
+        Returns:
+            The resolved path the schema was written to.
+
+        Raises:
+            ValueError: If ``register=True`` and the existing VSCode
+                settings file is not valid JSON (e.g. contains
+                ``//`` comments). Edit it manually or pass
+                ``register=False``.
+        """
+        return export_schema(
+            cls.model_json_schema(),
+            Path(path),
+            register=register,
+            yaml_glob=yaml_glob,
+            vscode_settings_path=Path(vscode_settings_path),
+        )
 
     def update_from_args(
         self,
