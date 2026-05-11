@@ -6,9 +6,9 @@ from typing import Any
 class _MissingType:
     """Singleton sentinel for keys that are absent from one side of a diff."""
 
-    _instance: "_MissingType | None" = None
+    _instance: _MissingType | None = None
 
-    def __new__(cls) -> "_MissingType":
+    def __new__(cls) -> _MissingType:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
