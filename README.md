@@ -360,24 +360,42 @@ extra/missing keys) is well-defined. The result is an ordered dict
 (self's keys first, in their declared order), so output is stable
 across runs.
 
-For human-readable output, `print_diff` and `format_diff` render the
-same data in unified-diff style. Green highlights what's new — the
-updated value on a changed row, or the value on an added row. Red is
-reserved for actual removals so red never reads as "this is bad":
+There are two human-readable views, one per use case:
+
+**`print_diff(other)` — side-by-side comparison.** Every changed leaf
+gets an `old → new` row, with red on the old side and green on the new.
+Keys present on only one side render with a dimmed `<MISSING>`
+placeholder:
 
 ```python
 baseline.print_diff(run)
 #   epochs            10           →  20
 #   model.name        'tiny-bert'  →  'bert-large'
 #   model.lr          0.0001       →  0.001
-# + experiment.id     'abc123'
-# - model.weight_init 'xavier'
 
-run.print_diff_from_defaults()    # same shape, against schema defaults
+baseline.print_diff({"epochs": 99, "experiment.id": "abc123"})
+#   epochs            10           →  99
+#   model.name        'tiny-bert'  →  <MISSING>
+#   experiment.id     <MISSING>    →  'abc123'
 ```
 
-Color is on by default when stdout is a tty; pass `color=False` to force
-it off (or `color=True` to keep it on when piping to a file).
+**`print_diff_from_defaults()` — config snapshot with override
+highlights.** Every field in the config shows up. Fields you've
+overridden render with red `default → current` (green); fields still
+at their default render alone in green. Useful as a one-glance "what
+does this run actually look like, and where did I deviate?":
+
+```python
+run.print_diff_from_defaults()
+#   epochs                  10           →  20
+#   debug                   False
+#   model.name              'tiny-bert'  →  'bert-large'
+#   model.hidden_size       768
+#   model.lr                0.0001       →  0.001
+```
+
+Color is on by default when stdout is a tty; pass `color=False` to
+force it off (or `color=True` to keep it on when piping to a file).
 
 ### Capture the running code's commit hash
 

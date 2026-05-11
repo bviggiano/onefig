@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from onefig import MISSING, ConfigModel
-from onefig._diff import _MissingType, compute_diff, format_diff
+from onefig._diff import (
+    _MissingType,
+    compute_diff,
+    format_against_defaults,
+    format_diff,
+)
 
 
 class Sub(ConfigModel):
@@ -165,46 +170,31 @@ def test_format_diff_basic_alignment() -> None:
         "model.lr": (1e-4, 1e-3),
     }
     out = format_diff(diff, color=False)
-    # Keys padded to common width; arrow separator; two-space indent on
-    # changed rows leaves room for `+ ` / `- ` markers.
+    # Side-by-side: key  old  →  new, with old column padded.
     assert out == (
         "  epochs    10      →  20\n"
         "  model.lr  0.0001  →  0.001"
     )
 
 
-def test_format_diff_added_row_uses_plus_prefix_no_arrow() -> None:
+def test_format_diff_renders_missing_on_added_side() -> None:
     out = format_diff({"experiment.id": (MISSING, "abc123")}, color=False)
-    assert out == "+ experiment.id  'abc123'"
-    assert "→" not in out
-    assert "MISSING" not in out
+    assert "<MISSING>" in out
+    assert "→" in out
+    assert "abc123" in out
 
 
-def test_format_diff_removed_row_uses_minus_prefix_no_arrow() -> None:
+def test_format_diff_renders_missing_on_removed_side() -> None:
     out = format_diff({"model.depth": (12, MISSING)}, color=False)
-    assert out == "- model.depth  12"
-    assert "→" not in out
-    assert "MISSING" not in out
+    assert "<MISSING>" in out
+    assert "→" in out
+    assert "12" in out
 
 
-def test_format_diff_mixed_rows() -> None:
-    diff = {
-        "epochs": (10, 20),
-        "added": (MISSING, "new"),
-        "removed": ("gone", MISSING),
-    }
-    lines = format_diff(diff, color=False).split("\n")
-    assert lines[0].startswith("  ") and "→" in lines[0]
-    assert lines[1].startswith("+ ")
-    assert lines[2].startswith("- ")
-
-
-def test_format_diff_changed_row_greens_only_new_value() -> None:
-    # Changed rows highlight only the new value in green; the prior
-    # value is left uncolored (it's a reference, not a removal).
+def test_format_diff_color_applies_ansi_codes() -> None:
     out = format_diff({"epochs": (10, 20)}, color=True)
+    assert "\033[31m" in out   # red for old
     assert "\033[32m" in out   # green for new
-    assert "\033[31m" not in out   # no red on old side
     assert "\033[0m" in out    # reset
 
 
@@ -213,17 +203,9 @@ def test_format_diff_color_off_strips_ansi() -> None:
     assert "\033[" not in out
 
 
-def test_format_diff_added_row_is_green_when_colored() -> None:
+def test_format_diff_missing_is_dimmed_when_colored() -> None:
     out = format_diff({"k": (MISSING, "v")}, color=True)
-    assert "\033[32m" in out   # green for the added value
-    assert "\033[31m" not in out
-
-
-def test_format_diff_removed_row_is_red_when_colored() -> None:
-    # Red is reserved for `-` rows (actual removals).
-    out = format_diff({"k": ("v", MISSING)}, color=True)
-    assert "\033[31m" in out   # red for the removed value
-    assert "\033[32m" not in out
+    assert "\033[2m" in out   # dim for the MISSING placeholder
 
 
 # ---- ConfigModel.format_diff / print_diff ----------------------------------
@@ -248,12 +230,80 @@ def test_print_diff_writes_to_stdout(capsys: pytest.CaptureFixture[str]) -> None
     assert "→" in captured.out
 
 
-def test_format_diff_from_defaults_arrows_point_default_to_current() -> None:
+# ---- format_against_defaults -----------------------------------------------
+
+
+def test_format_against_defaults_shows_all_fields() -> None:
+    out = format_against_defaults(
+        current={"a": 1, "b": 2, "c": 3},
+        defaults={"a": 1, "b": 2, "c": 3},
+        color=False,
+    )
+    # Every field rendered, no overrides.
+    assert "a" in out and "b" in out and "c" in out
+    assert "→" not in out
+
+
+def test_format_against_defaults_overridden_row_has_arrow() -> None:
+    out = format_against_defaults(
+        current={"epochs": 99, "debug": False},
+        defaults={"epochs": 10, "debug": False},
+        color=False,
+    )
+    # epochs is overridden (10 → 99); debug is unchanged.
+    lines = out.split("\n")
+    assert any("10" in ln and "99" in ln and "→" in ln for ln in lines)
+    assert any("debug" in ln and "→" not in ln for ln in lines)
+
+
+def test_format_against_defaults_unchanged_value_is_green() -> None:
+    out = format_against_defaults(
+        current={"a": 1},
+        defaults={"a": 1},
+        color=True,
+    )
+    # Unchanged value is colored green.
+    assert "\033[32m" in out
+    assert "\033[31m" not in out
+    assert "→" not in out
+
+
+def test_format_against_defaults_overridden_row_is_red_to_green() -> None:
+    out = format_against_defaults(
+        current={"a": 2},
+        defaults={"a": 1},
+        color=True,
+    )
+    assert "\033[31m" in out   # red for default
+    assert "\033[32m" in out   # green for current
+    assert "→" in out
+
+
+def test_format_against_defaults_empty_returns_message() -> None:
+    assert format_against_defaults({}, {}, color=False) == "(empty config)"
+
+
+# ---- ConfigModel.format_diff_from_defaults ---------------------------------
+
+
+def test_format_diff_from_defaults_includes_unchanged_fields() -> None:
+    # Cfg has defaults epochs=10, debug=False, model.lr=1e-4, model.name="default".
+    # Overriding only `epochs` should still surface every other field.
     cfg = Cfg(epochs=99)
     out = cfg.format_diff_from_defaults(color=False)
-    # Default 10 → current 99 (arrow reads "was 10, now 99").
-    assert "10" in out and "99" in out
-    assert out.index("10") < out.index("99")
+    assert "epochs" in out and "10" in out and "99" in out
+    assert "debug" in out
+    assert "model.lr" in out
+    assert "model.name" in out
+
+
+def test_format_diff_from_defaults_only_overridden_have_arrows() -> None:
+    cfg = Cfg(epochs=99)
+    lines = cfg.format_diff_from_defaults(color=False).split("\n")
+    epoch_lines = [ln for ln in lines if "epochs" in ln]
+    debug_lines = [ln for ln in lines if "debug" in ln]
+    assert epoch_lines and "→" in epoch_lines[0]
+    assert debug_lines and "→" not in debug_lines[0]
 
 
 def test_print_diff_from_defaults_writes_to_stdout(
@@ -264,3 +314,9 @@ def test_print_diff_from_defaults_writes_to_stdout(
     captured = capsys.readouterr()
     assert "epochs" in captured.out
     assert "→" in captured.out
+
+
+def test_format_diff_from_defaults_raises_when_required_fields_missing() -> None:
+    cfg = HasRequired(name="explicit")
+    with pytest.raises(ValueError, match="required fields"):
+        cfg.format_diff_from_defaults()
