@@ -80,8 +80,7 @@ def format_diff(
     if not diff:
         return empty_message
 
-    if color is None:
-        color = sys.stdout.isatty()
+    use_color = sys.stdout.isatty() if color is None else color
 
     raw_olds = [_format_value(old) for old, _ in diff.values()]
     raw_news = [_format_value(new) for _, new in diff.values()]
@@ -94,8 +93,8 @@ def format_diff(
         diff.items(), raw_olds, raw_news
     ):
         old_padded = old_str.ljust(old_width)
-        old_styled = _style_value(old_padded, old, _RED, enabled=color)
-        new_styled = _style_value(new_str, new, _GREEN, enabled=color)
+        old_styled = _style_value(old_padded, old, _RED, enabled=use_color)
+        new_styled = _style_value(new_str, new, _GREEN, enabled=use_color)
         lines.append(f"  {key.ljust(key_width)}  {old_styled}  →  {new_styled}")
     return "\n".join(lines)
 
@@ -130,8 +129,7 @@ def format_against_defaults(
     if not current:
         return empty_message
 
-    if color is None:
-        color = sys.stdout.isatty()
+    use_color = sys.stdout.isatty() if color is None else color
 
     keys = list(current.keys())
     key_width = max(len(k) for k in keys)
@@ -150,7 +148,7 @@ def format_against_defaults(
         cur_repr = repr(cur_val)
         if key in defaults and defaults[key] == cur_val:
             # Unchanged — single green value, no arrow.
-            value_styled = _style(cur_repr, _GREEN, enabled=color)
+            value_styled = _style(cur_repr, _GREEN, enabled=use_color)
             lines.append(f"  {key_col}  {value_styled}")
         else:
             # Overridden — default in red, current in green.
@@ -158,8 +156,8 @@ def format_against_defaults(
                 repr(defaults[key]) if key in defaults else "<MISSING>"
             )
             old_padded = default_repr.ljust(old_width)
-            old_styled = _style(old_padded, _RED, enabled=color)
-            new_styled = _style(cur_repr, _GREEN, enabled=color)
+            old_styled = _style(old_padded, _RED, enabled=use_color)
+            new_styled = _style(cur_repr, _GREEN, enabled=use_color)
             lines.append(f"  {key_col}  {old_styled}  →  {new_styled}")
     return "\n".join(lines)
 
