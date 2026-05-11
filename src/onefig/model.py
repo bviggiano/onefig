@@ -466,7 +466,7 @@ class ConfigModel(BaseModel):
         return flatten(self.model_dump())
 
     def diff(
-        self, other: "ConfigModel | dict[str, Any]"
+        self, other: ConfigModel | dict[str, Any]
     ) -> dict[str, tuple[Any, Any]]:
         """Diff this config's leaves against another config or dict.
 
