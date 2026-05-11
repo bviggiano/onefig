@@ -117,7 +117,7 @@ def test_install_completion_emits_zsh_script(
         ["--onefig-install-completion", "zsh"], exit_on_completion=False
     )
     out = capsys.readouterr().out
-    assert "#compdef" in out
+    assert "compdef _onefig_complete_" in out
     assert "compadd" in out
 
 
@@ -173,11 +173,24 @@ def test_python_wrapper_bash_targets_python_commands() -> None:
     assert "--onefig-completions" in out
     # Falls back to file completion while the user is still typing the script.
     assert "compgen -f" in out
+    # Greps for "onefig" in the script before invoking it, so non-onefig
+    # scripts don't have their import-time side effects fire on TAB.
+    assert "grep -qw onefig" in out
+
+
+def test_python_wrapper_zsh_greps_before_invoking() -> None:
+    out = python_completion_script("zsh")
+    assert "grep -qw onefig" in out
+
+
+def test_python_wrapper_fish_greps_before_invoking() -> None:
+    out = python_completion_script("fish")
+    assert "grep -qw onefig" in out
 
 
 def test_python_wrapper_zsh_uses_compdef() -> None:
     out = python_completion_script("zsh")
-    assert "#compdef python python3" in out
+    assert "compdef _onefig_python_complete python python3" in out
     assert "--onefig-completions" in out
     assert "_files" in out  # fallback while typing the script
 

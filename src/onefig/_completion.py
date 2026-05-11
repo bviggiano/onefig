@@ -99,13 +99,16 @@ def _zsh_script(prog: str) -> str:
     func = f"_onefig_complete_{_safe_func_suffix(prog)}"
     qprog = shlex.quote(prog)
     return f"""\
-#compdef {prog}
+# onefig zsh completion for {prog}
 {func}() {{
     local -a candidates
     candidates=("${{(@f)$({qprog} --onefig-completions \"$PREFIX\" 2>/dev/null)}}")
-    compadd -S '' -- $candidates
+    [[ ${{#candidates[@]}} -gt 0 ]] && compadd -S '' -- $candidates
 }}
-{func} "$@"
+if (( ! ${{+functions[compdef]}} )); then
+    autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
+fi
+(( ${{+functions[compdef]}} )) && compdef {func} {prog}
 """
 
 
@@ -125,11 +128,17 @@ def python_completion_script(shell: str) -> str:
     """Render an install snippet for ``python <script>.py`` tab completion.
 
     Bound to ``python`` / ``python3`` (and friends), the generated function
-    walks the current command line to find the script arg, then invokes
-    ``<python> <script> --onefig-completions <prefix>`` and uses the output
-    as the candidate list. Falls back to file completion while the user is
-    still typing the script path; falls back to no completions when the
-    script isn't an onefig script (or errors).
+    walks the current command line to find the script arg. Before
+    invoking the script it greps for the literal word ``onefig`` in the
+    file; if not found, the wrapper returns immediately without running
+    the script. This keeps TAB safe for arbitrary Python scripts that
+    have side effects at import time. Onefig scripts (anything that
+    ``import``s or references ``onefig``) match the grep and are invoked
+    with ``--onefig-completions <prefix>``; the printed candidates are
+    used as the completion list.
+
+    Falls back to file completion while the user is still typing the
+    script path.
 
     One-time install. Sourcing the snippet enables completion for every
     onefig-based script invoked via ``python``, regardless of whether the
@@ -186,6 +195,8 @@ _onefig_python_complete() {{
         COMPREPLY=( $(compgen -f -- "$cur") )
         return
     fi
+    # Skip non-onefig scripts to avoid running their side effects on TAB.
+    grep -qw onefig "$script" 2>/dev/null || return
     local IFS=$'\\n'
     local candidates
     candidates=$("${{COMP_WORDS[0]}}" "$script" --onefig-completions "$cur" 2>/dev/null)
@@ -205,7 +216,7 @@ def _python_zsh_script() -> str:
         '--onefig-completions "$PREFIX" 2>/dev/null)}")'
     )
     return f"""\
-#compdef {targets}
+# onefig zsh completion for `python <script>.py` invocations
 _onefig_python_complete() {{
     local script python_cmd i
     python_cmd="${{words[1]}}"
@@ -225,11 +236,16 @@ _onefig_python_complete() {{
         _files
         return
     fi
+    # Skip non-onefig scripts to avoid running their side effects on TAB.
+    grep -qw onefig "$script" 2>/dev/null || return
     local -a candidates
     candidates={cand_expr}
     [[ ${{#candidates[@]}} -gt 0 ]] && compadd -S '' -- $candidates
 }}
-_onefig_python_complete "$@"
+if (( ! ${{+functions[compdef]}} )); then
+    autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
+fi
+(( ${{+functions[compdef]}} )) && compdef _onefig_python_complete {targets}
 """
 
 
@@ -251,6 +267,10 @@ function __onefig_python_complete
     end
     if test -z "$script"
         __fish_complete_path "$cur"
+        return
+    end
+    # Skip non-onefig scripts to avoid running their side effects on TAB.
+    if not grep -qw onefig "$script" 2>/dev/null
         return
     end
     $tokens[1] "$script" --onefig-completions "$cur" 2>/dev/null

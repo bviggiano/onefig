@@ -22,7 +22,7 @@ def test_install_completion_supports_zsh(
     rc = main(["install-completion", "zsh", "--prog", "mytool"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "#compdef mytool" in out
+    assert "compdef _onefig_complete_mytool mytool" in out
 
 
 def test_install_completion_supports_fish(
