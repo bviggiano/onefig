@@ -3,8 +3,9 @@ from __future__ import annotations
 import os
 import sys
 from argparse import Namespace
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
