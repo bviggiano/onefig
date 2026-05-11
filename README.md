@@ -361,15 +361,17 @@ extra/missing keys) is well-defined. The result is an ordered dict
 across runs.
 
 For human-readable output, `print_diff` and `format_diff` render the
-same data as an aligned table with `old → new` arrows, ANSI red on the
-old side, green on the new side, and dimmed `<MISSING>` for any keys
-present on only one side:
+same data in unified-diff style — changed rows show `old → new` (red
+old, green new), added rows are prefixed with `+` (green), removed rows
+with `-` (red):
 
 ```python
 baseline.print_diff(run)
-# epochs            10           →  20
-# model.name        'tiny-bert'  →  'bert-large'
-# model.lr          0.0001       →  0.001
+#   epochs            10           →  20
+#   model.name        'tiny-bert'  →  'bert-large'
+#   model.lr          0.0001       →  0.001
+# + experiment.id     'abc123'
+# - model.weight_init 'xavier'
 
 run.print_diff_from_defaults()    # same shape, against schema defaults
 ```
