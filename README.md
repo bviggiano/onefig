@@ -377,6 +377,55 @@ class TrainCfg(ConfigModel):
 
 Runs after every `load` / `from_dict` / `from_flat_dict` / direct construction.
 
+### Compose configs with `extends:`
+
+> *"Many that live deserve death. And some that die deserve life. Can you give it to them, Frodo?"*
+
+A top-level `extends:` key pulls in one or more parent YAML files before
+validation. The parent is loaded first; the current file is deep-merged
+on top, so you can keep a shared base and only spell out the deltas in
+each variant:
+
+```yaml
+# base.yaml
+epochs: 10
+model:
+  name: bert-base
+  lr: 0.001
+  arch:
+    depth: 12
+```
+
+```yaml
+# experiments/small-fast.yaml
+extends: ../base.yaml
+epochs: 3
+model:
+  name: tiny-bert
+  arch:
+    depth: 4         # overrides; `lr` is inherited from base
+```
+
+Result, after `TrainCfg.load("experiments/small-fast.yaml")`:
+
+```python
+{"epochs": 3, "model": {"name": "tiny-bert", "lr": 0.001,
+                        "arch": {"depth": 4}}}
+```
+
+Mechanics:
+
+- **List of parents** — `extends: [a.yaml, b.yaml]` merges left-to-right
+  (later parents override earlier ones), then the current file overrides
+  all parents.
+- **Chains** — parents may themselves `extends:` something. Cycles are
+  detected and raise.
+- **Path resolution** — paths are relative to the file containing the
+  `extends:` key. Absolute paths also work.
+- **Interpolation timing** — `${...}` interpolations are resolved after
+  the whole chain is merged, so a parent can reference a key that only
+  a child supplies.
+
 ### Cross-file YAML interpolation
 
 ```yaml
@@ -407,6 +456,9 @@ print(cfg.epochs)          # reads always work
 ## Features
 
 - **YAML + interpolation** — `${other.key}`, `${oc.env:VAR}` resolved via OmegaConf.
+- **YAML composition** — top-level `extends: base.yaml` (or a list)
+  deep-merges parent files into the current one before validation, with
+  cycle detection and cross-file interpolation.
 - **Typed configs** — Pydantic validates on load and on every assignment;
   unknown fields rejected (`extra="forbid"`).
 - **Two CLI override paths** — argparse-free `update_from_cli` for quick
