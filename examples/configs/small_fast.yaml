@@ -1,0 +1,8 @@
+# A variant that pulls everything from base.yaml and only spells out
+# the deltas — fewer epochs and a shallower model.
+extends: base.yaml
+epochs: 3
+model:
+  num_layers: 2
+tags:
+  - smoke-test
