@@ -105,10 +105,13 @@ def format_diff(
             old_styled = _style(repr(old), _RED, enabled=color)
             lines.append(f"- {key_col}  {old_styled}")
         else:
+            # Changed rows: leave the prior value uncolored (it's a
+            # reference point, not a removal). Only the new value is
+            # highlighted in green. Red is reserved for the `-` rows
+            # above so the eye distinguishes "changed" from "removed".
             old_padded = repr(old).ljust(old_width)
-            old_styled = _style(old_padded, _RED, enabled=color)
             new_styled = _style(repr(new), _GREEN, enabled=color)
-            lines.append(f"  {key_col}  {old_styled}  →  {new_styled}")
+            lines.append(f"  {key_col}  {old_padded}  →  {new_styled}")
     return "\n".join(lines)
 
 
