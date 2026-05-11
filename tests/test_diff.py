@@ -199,10 +199,12 @@ def test_format_diff_mixed_rows() -> None:
     assert lines[2].startswith("- ")
 
 
-def test_format_diff_color_applies_ansi_codes() -> None:
+def test_format_diff_changed_row_greens_only_new_value() -> None:
+    # Changed rows highlight only the new value in green; the prior
+    # value is left uncolored (it's a reference, not a removal).
     out = format_diff({"epochs": (10, 20)}, color=True)
-    assert "\033[31m" in out   # red for old
     assert "\033[32m" in out   # green for new
+    assert "\033[31m" not in out   # no red on old side
     assert "\033[0m" in out    # reset
 
 
@@ -218,6 +220,7 @@ def test_format_diff_added_row_is_green_when_colored() -> None:
 
 
 def test_format_diff_removed_row_is_red_when_colored() -> None:
+    # Red is reserved for `-` rows (actual removals).
     out = format_diff({"k": ("v", MISSING)}, color=True)
     assert "\033[31m" in out   # red for the removed value
     assert "\033[32m" not in out

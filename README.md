@@ -361,9 +361,9 @@ extra/missing keys) is well-defined. The result is an ordered dict
 across runs.
 
 For human-readable output, `print_diff` and `format_diff` render the
-same data in unified-diff style — changed rows show `old → new` (red
-old, green new), added rows are prefixed with `+` (green), removed rows
-with `-` (red):
+same data in unified-diff style. Green highlights what's new — the
+updated value on a changed row, or the value on an added row. Red is
+reserved for actual removals so red never reads as "this is bad":
 
 ```python
 baseline.print_diff(run)
