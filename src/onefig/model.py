@@ -10,6 +10,11 @@ from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 from typing_extensions import Self
 
 from onefig._cli import parse_overrides
+from onefig._completion import (
+    completion_candidates,
+    python_completion_script,
+    shell_script,
+)
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
@@ -194,6 +199,7 @@ class ConfigModel(BaseModel):
         strict: bool = True,
         exit_on_show: bool = True,
         exit_on_help: bool = True,
+        exit_on_completion: bool = True,
     ) -> None:
         """Apply ``key=value`` overrides parsed directly from CLI tokens.
 
@@ -217,6 +223,15 @@ class ConfigModel(BaseModel):
             exit. Short-circuits override application.
           * ``--show`` — apply overrides, then print the resolved config and
             exit.
+          * ``--onefig-install-completion <bash|zsh|fish>`` — print a shell
+            completion install snippet for the calling script and exit.
+          * ``--onefig-install-python-completion <bash|zsh|fish>`` — print a
+            generic shell snippet that enables tab completion for every
+            onefig-based script invoked via ``python <script>.py``. One-time
+            install per shell.
+          * ``--onefig-completions [PARTIAL]`` — emit one tab-completion
+            candidate per line (filtered by ``PARTIAL`` if present). Used
+            internally by the installed shell scripts; rarely typed by hand.
 
         Args:
             args: List of CLI tokens. Defaults to ``sys.argv[1:]``.
@@ -227,18 +242,48 @@ class ConfigModel(BaseModel):
             exit_on_help: If ``True`` (default), ``--help`` / ``-h``
                 triggers :func:`sys.exit` after printing. Set to ``False``
                 to keep the call returning normally (useful in tests).
+            exit_on_completion: If ``True`` (default), the completion-related
+                flags trigger :func:`sys.exit` after printing. Set to
+                ``False`` for testing.
 
         Raises:
             ValueError: For malformed tokens, ambiguous leaf keys, or (when
                 ``strict``) unknown keys.
             pydantic.ValidationError: If a value fails type validation at
                 the destination field.
-            SystemExit: If ``--show`` or ``--help`` / ``-h`` was passed and
-                the corresponding ``exit_on_*`` flag is ``True``.
+            SystemExit: If ``--show``, ``--help`` / ``-h``, or one of the
+                completion flags was passed and the corresponding
+                ``exit_on_*`` flag is ``True``.
         """
         if args is None:
             args = sys.argv[1:]
         tokens = list(args)
+
+        if "--onefig-install-completion" in tokens:
+            idx = tokens.index("--onefig-install-completion")
+            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+            print(self.shell_completion_script(shell))
+            if exit_on_completion:
+                sys.exit(0)
+            return
+
+        if "--onefig-install-python-completion" in tokens:
+            idx = tokens.index("--onefig-install-python-completion")
+            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+            print(self.python_wrapper_completion_script(shell))
+            if exit_on_completion:
+                sys.exit(0)
+            return
+
+        if "--onefig-completions" in tokens:
+            idx = tokens.index("--onefig-completions")
+            partial = tokens[idx + 1] if idx + 1 < len(tokens) else ""
+            for cand in self.completion_candidates():
+                if cand.startswith(partial):
+                    print(cand)
+            if exit_on_completion:
+                sys.exit(0)
+            return
 
         if "--help" in tokens or "-h" in tokens:
             self.print_help()
@@ -277,6 +322,71 @@ class ConfigModel(BaseModel):
     def print_help(self, title: str | None = None) -> None:
         """Print :meth:`format_help` to stdout."""
         print(self.format_help(title=title))
+
+    def completion_candidates(self) -> list[str]:
+        """Return tab-completion candidates for this config's CLI overrides.
+
+        Each scalar field contributes its full dotted path suffixed with
+        ``=`` (e.g. ``"optimizer.lr="``); unambiguous leaf names are
+        offered as shorthands; ambiguous leaves are omitted. Special flags
+        (``--show``, ``--help``, ``-h``) are appended.
+
+        Used by the shell completion scripts emitted by
+        :meth:`shell_completion_script`.
+
+        Returns:
+            A flat list of completion strings, in stable insertion order.
+        """
+        return completion_candidates(self)
+
+    def python_wrapper_completion_script(self, shell: str) -> str:
+        """Render a shell snippet that enables ``python <script>.py`` completion.
+
+        Unlike :meth:`shell_completion_script`, which binds completion to
+        the calling script's name, this script binds completion to the
+        ``python`` / ``python3`` commands themselves. After installing it
+        once, every onefig-based script invoked via ``python script.py``
+        gets tab completion automatically.
+
+        Internally, the generated function walks the command line to find
+        the script argument, then invokes ``<python> <script>
+        --onefig-completions <prefix>`` and uses the output as candidates.
+        Non-onefig scripts produce no candidates and the user sees the
+        shell's default behavior.
+
+        Args:
+            shell: One of ``"bash"``, ``"zsh"``, ``"fish"``.
+
+        Returns:
+            A shell snippet ready to write to a file or eval.
+
+        Raises:
+            ValueError: If ``shell`` isn't one of the supported shells.
+        """
+        return python_completion_script(shell)
+
+    def shell_completion_script(self, shell: str, *, prog: str | None = None) -> str:
+        """Render a shell-completion install snippet for the calling script.
+
+        The generated script binds tab-completion of ``prog`` to a callback
+        that invokes ``prog --onefig-completions <prefix>`` on every TAB
+        and uses the output as the candidate list.
+
+        Args:
+            shell: One of ``"bash"``, ``"zsh"``, ``"fish"``.
+            prog: Command name the user types to invoke the script. Defaults
+                to ``sys.argv[0]`` (basename), which is correct when the
+                script is on ``$PATH`` and directly executable.
+
+        Returns:
+            A shell snippet ready to write to a file or eval.
+
+        Raises:
+            ValueError: If ``shell`` isn't one of the supported shells.
+        """
+        if prog is None:
+            prog = Path(sys.argv[0]).name or "onefig-script"
+        return shell_script(shell, prog=prog)
 
     def to_dict(self) -> dict[str, Any]:
         """Dump this config to a nested ``dict``.
