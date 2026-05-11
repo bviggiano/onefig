@@ -5,7 +5,7 @@
 [![CI](https://github.com/bviggiano/onefig/actions/workflows/ci.yml/badge.svg)](https://github.com/bviggiano/onefig/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Memes](https://img.shields.io/badge/memes-watch-blueviolet)](#memes)
+[![Memes](https://img.shields.io/badge/lotr-memes-blueviolet)](#memes)
 
 ```bash
 pip install onefig
