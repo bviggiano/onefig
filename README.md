@@ -15,7 +15,7 @@ pip install onefig
 
 ![hero.png](https://raw.githubusercontent.com/bviggiano/onefig/main/hero.png)
 
-A simple, typed YAML config system for Python that tries to unite the best aspects of various config libaries into one API.
+A simple, typed YAML config system for Python that tries to unite the best aspects of various config libraries into one API.
 
 > **One config to rule them all!**
 
