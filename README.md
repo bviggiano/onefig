@@ -13,7 +13,7 @@ pip install onefig
 
 > OPTIONAL: One-time TAB completion setup: see [Shell tab completion](#shell-tab-completion).
 
-![hero.png](hero.png)
+![hero.png](https://raw.githubusercontent.com/bviggiano/onefig/main/hero.png)
 
 A simple, typed YAML config system for Python that tries to unite the best aspects of various config libaries into one API.
 
@@ -652,14 +652,14 @@ MIT
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=Y5NTgZA-xWE">
-    <img src="assets/lotr/butmylord.gif" height="80" alt="But my lord, there is no Frodo">
+    <img src="https://raw.githubusercontent.com/bviggiano/onefig/main/assets/lotr/butmylord.gif" height="80" alt="But my lord, there is no Frodo">
   </a>
   &nbsp;&nbsp;
   <a href="https://youtube.com/shorts/u5sLlWVtC68">
-    <img src="assets/lotr/gandalf-nod.gif" width="80" alt="Gandalf nod">
+    <img src="https://raw.githubusercontent.com/bviggiano/onefig/main/assets/lotr/gandalf-nod.gif" width="80" alt="Gandalf nod">
   </a>
   &nbsp;&nbsp;
   <a href="https://www.youtube.com/watch?v=uE-1RPDqJAY">
-    <img src="assets/lotr/theyre-taking-the-hobbits-to-isengard.gif" width="80" alt="They're taking the hobbits to Isengard">
+    <img src="https://raw.githubusercontent.com/bviggiano/onefig/main/assets/lotr/theyre-taking-the-hobbits-to-isengard.gif" width="80" alt="They're taking the hobbits to Isengard">
   </a>
 </p>
