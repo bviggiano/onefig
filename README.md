@@ -652,7 +652,7 @@ MIT
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=Y5NTgZA-xWE">
-    <img src="assets/lotr/butmylord.gif" width="80" alt="But my lord, there is no Frodo">
+    <img src="assets/lotr/butmylord.gif" height="80" alt="But my lord, there is no Frodo">
   </a>
   &nbsp;&nbsp;
   <a href="https://youtube.com/shorts/u5sLlWVtC68">
