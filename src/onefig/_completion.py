@@ -79,10 +79,17 @@ def _safe_func_suffix(prog: str) -> str:
     return "".join(out) or "onefig"
 
 
+_BANNER_OPEN = "# ========== onefig: tab completion =========="
+_BANNER_CLOSE = "# ============================================"
+_PY_BANNER_OPEN = "# ====== onefig: python tab completion ======="
+_PY_BANNER_CLOSE = "# ============================================"
+
+
 def _bash_script(prog: str) -> str:
     func = f"_onefig_complete_{_safe_func_suffix(prog)}"
     qprog = shlex.quote(prog)
     return f"""\
+{_BANNER_OPEN}
 {func}() {{
     local cur
     cur="${{COMP_WORDS[COMP_CWORD]}}"
@@ -92,6 +99,7 @@ def _bash_script(prog: str) -> str:
     COMPREPLY=( $(compgen -W "$candidates" -- "$cur") )
 }}
 complete -o nospace -F {func} {qprog}
+{_BANNER_CLOSE}
 """
 
 
@@ -99,7 +107,7 @@ def _zsh_script(prog: str) -> str:
     func = f"_onefig_complete_{_safe_func_suffix(prog)}"
     qprog = shlex.quote(prog)
     return f"""\
-# onefig zsh completion for {prog}
+{_BANNER_OPEN}
 {func}() {{
     local -a candidates
     candidates=("${{(@f)$({qprog} --onefig-completions \"$PREFIX\" 2>/dev/null)}}")
@@ -109,6 +117,7 @@ if (( ! ${{+functions[compdef]}} )); then
     autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
 fi
 (( ${{+functions[compdef]}} )) && compdef {func} {prog}
+{_BANNER_CLOSE}
 """
 
 
@@ -116,11 +125,13 @@ def _fish_script(prog: str) -> str:
     func = f"__onefig_complete_{_safe_func_suffix(prog)}"
     qprog = shlex.quote(prog)
     return f"""\
+{_BANNER_OPEN}
 function {func}
     set -l cur (commandline -t)
     {qprog} --onefig-completions "$cur" 2>/dev/null
 end
 complete -c {prog} -f -a '({func})'
+{_BANNER_CLOSE}
 """
 
 
@@ -176,6 +187,7 @@ _PYTHON_NAMES = (
 def _python_bash_script() -> str:
     targets = " ".join(_PYTHON_NAMES)
     return f"""\
+{_PY_BANNER_OPEN}
 _onefig_python_complete() {{
     local cur script i
     cur="${{COMP_WORDS[COMP_CWORD]}}"
@@ -206,6 +218,7 @@ _onefig_python_complete() {{
     COMPREPLY=( $(compgen -W "$candidates" -- "$cur") )
 }}
 complete -o nospace -F _onefig_python_complete {targets}
+{_PY_BANNER_CLOSE}
 """
 
 
@@ -216,7 +229,7 @@ def _python_zsh_script() -> str:
         '--onefig-completions "$PREFIX" 2>/dev/null)}")'
     )
     return f"""\
-# onefig zsh completion for `python <script>.py` invocations
+{_PY_BANNER_OPEN}
 _onefig_python_complete() {{
     local script python_cmd i
     python_cmd="${{words[1]}}"
@@ -246,12 +259,14 @@ if (( ! ${{+functions[compdef]}} )); then
     autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
 fi
 (( ${{+functions[compdef]}} )) && compdef _onefig_python_complete {targets}
+{_PY_BANNER_CLOSE}
 """
 
 
 def _python_fish_script() -> str:
     cmds = " ".join(f"-c {n}" for n in _PYTHON_NAMES)
     return f"""\
+{_PY_BANNER_OPEN}
 function __onefig_python_complete
     set -l tokens (commandline -opc)
     set -l cur (commandline -t)
@@ -276,4 +291,5 @@ function __onefig_python_complete
     $tokens[1] "$script" --onefig-completions "$cur" 2>/dev/null
 end
 complete {cmds} -f -a '(__onefig_python_complete)'
+{_PY_BANNER_CLOSE}
 """

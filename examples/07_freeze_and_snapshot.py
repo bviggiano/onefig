@@ -2,7 +2,7 @@
 
 Run from the repo root:
 
-    python examples/04_freeze_and_snapshot.py epochs=3 lr=0.01
+    python examples/07_freeze_and_snapshot.py epochs=3 lr=0.01
 
 The script writes ``runs/<config_name>/config.yaml`` so you can reproduce the
 run by loading the snapshot back through ``TrainCfg.load(...)``.

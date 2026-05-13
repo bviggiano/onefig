@@ -1,8 +1,13 @@
-"""Define a typed schema, load YAML, display the resolved config.
+"""CLI overrides via ``key=value`` tokens (no argparse).
 
-Run from the repo root:
+Try a few of these from the repo root:
 
-    python examples/01_basic.py
+    python examples/01_cli_overrides.py
+    python examples/01_cli_overrides.py epochs=20 lr=0.001
+    python examples/01_cli_overrides.py model.hidden_size=1024 --show
+    python examples/01_cli_overrides.py optimizer.kind=sgd
+
+``lr`` resolves unambiguously to ``optimizer.lr`` thanks to leaf-key shortcuts.
 """
 
 from __future__ import annotations
@@ -34,10 +39,9 @@ class TrainCfg(ConfigModel):
 
 def main() -> None:
     cfg = TrainCfg.load("examples/configs/train.yaml")
+    cfg.update_from_cli()  # consumes sys.argv[1:]
+    cfg.freeze()
     cfg.display()
-    print()
-    print(f"Resolved run_name (interpolated): {cfg.run_name!r}")
-    print(f"Captured commit hash:             {cfg.commit_hash}")
 
 
 if __name__ == "__main__":

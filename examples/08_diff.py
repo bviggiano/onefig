@@ -19,7 +19,7 @@ logging or piping into a file). Color auto-detects via
 
 Run from the repo root:
 
-    python examples/09_diff.py
+    python examples/08_diff.py
 """
 
 from __future__ import annotations
