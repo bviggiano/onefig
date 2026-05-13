@@ -29,21 +29,46 @@ Configuration management is at the heart of most ML workflows, but can be wildly
 
 > *"Speak, friend, and enter."*
 
-Define your schema as a `ConfigModel`:
+Define a `ConfigModel` with defaults and drive it from the CLI:
 
 ```python
+# script.py
 from onefig import ConfigModel
 
 class ModelCfg(ConfigModel):
-    name: str
+    name: str = "tiny-bert"
     lr: float = 1e-4
 
 class TrainCfg(ConfigModel):
     epochs: int = 10
-    model: ModelCfg
+    model: ModelCfg = ModelCfg()
+
+def main():
+    cfg = TrainCfg()
+    cfg.update_from_cli()                  # picks up sys.argv[1:], supports --help / --show
+    cfg.freeze()
+    cfg.display()
+
+if __name__ == "__main__":
+    main()
 ```
 
-Author the YAML:
+Run it:
+
+```bash
+python script.py                          # uses schema defaults
+python script.py lr=0.001 epochs=20       # CLI overrides
+python script.py model.name=bert-base     # dotted-path override
+python script.py lr=0.001 --show          # print resolved config and exit
+python script.py --help                   # list every overridable field
+```
+
+> Runnable demo: [`examples/01_cli_overrides.py`](examples/01_cli_overrides.py).
+
+### Loading from YAML
+
+When you want defaults to live alongside the code in a config file, swap the
+direct constructor for `load`:
 
 ```yaml
 # train.yaml
@@ -53,35 +78,17 @@ model:
   lr: 0.001
 ```
 
-Use the config in a script:
-
 ```python
-from onefig import ConfigModel
-
-# (your schema as above)
-
-def main():
-    cfg = TrainCfg.load("train")          # name lookup, or pass a path
-    cfg.update_from_cli()                  # picks up sys.argv[1:], supports --show
-    cfg.freeze()
-    cfg.display()
-    train(cfg)
-
-if __name__ == "__main__":
-    main()
+cfg = TrainCfg.load("train")              # name lookup, or pass a path
+cfg.update_from_cli()                      # CLI still overrides
+cfg.freeze()
 ```
 
-Run it:
+YAML files support `${...}` interpolation and `extends:` composition; see
+[Compose configs with `extends:`](#compose-configs-with-extends) and
+[Cross-file YAML interpolation](#cross-file-yaml-interpolation) below.
 
-```bash
-python script.py                          # uses YAML defaults
-python script.py lr=0.001 epochs=20       # CLI overrides
-python script.py model.name=bert-base     # dotted-path override
-python script.py lr=0.001 --show          # print resolved config and exit
-python script.py --help                   # list every overridable field
-```
-
-> Runnable demo: [`examples/01_basic.py`](examples/01_basic.py).
+> Runnable demo: [`examples/02_basic.py`](examples/02_basic.py).
 
 ## Shell tab completion
 
@@ -129,12 +136,12 @@ source ~/.config/fish/config.fish
 **3. Try it.**
 
 ```bash
-python examples/06_completion.py opt<TAB>   # → optimizer.kind=  optimizer.lr=
-python examples/06_completion.py l<TAB>     # → lr=
-python examples/06_completion.py --<TAB>    # → --show  --help
+python examples/03_completion.py opt<TAB>   # → optimizer.kind=  optimizer.lr=
+python examples/03_completion.py l<TAB>     # → lr=
+python examples/03_completion.py --<TAB>    # → --show  --help
 ```
 
-> Runnable demo: [`examples/06_completion.py`](examples/06_completion.py).
+> Runnable demo: [`examples/03_completion.py`](examples/03_completion.py).
 
 **Preview before sourcing.** Both subcommands print their snippet to
 stdout, so you can inspect what would be appended to your rc file, or
@@ -187,16 +194,15 @@ ambiguous):
 
 ```python
 from typing import Literal
+from pydantic import Field
 
+# Attach help text with Pydantic's Field(description=...).
 class OptCfg(ConfigModel):
-    kind: Literal["sgd", "adam", "adamw"] = "sgd"
-    """Which optimizer to use."""
-    lr: float = 1e-4
-    """Learning rate."""
+    kind: Literal["sgd", "adam", "adamw"] = Field("sgd", description="Which optimizer to use.")
+    lr: float = Field(1e-4, description="Learning rate.")
 
 class TrainCfg(ConfigModel):
-    epochs: int = 10
-    """Number of epochs."""
+    epochs: int = Field(10, description="Number of epochs.")
     optimizer: OptCfg = OptCfg()
 ```
 
@@ -243,13 +249,15 @@ description (it wraps to the next indented line if it overflows). Run with
 ```
 
 `Literal[...]` choices and `Enum` members are listed inline so users can
-discover valid values from the help output. Field docstrings (PEP 257) are
-used as descriptions automatically; an explicit `Field(description=...)`
-takes precedence when both are provided. The same output is available as
-`cfg.print_help()` (or `cfg.format_help()` for the string), which is
-useful when integrating with an argparse-driven entry point.
+discover valid values from the help output. Descriptions come from
+`Field(description=...)`; PEP 257 field docstrings (a `"""..."""` block
+on the line *below* the field) are also supported, with
+`Field(description=...)` taking precedence when both are provided. The
+same output is available as `cfg.print_help()` (or `cfg.format_help()` for
+the string), which is useful when integrating with an argparse-driven
+entry point.
 
-> Runnable demo: [`examples/03_help.py`](examples/03_help.py).
+> Runnable demo: [`examples/04_help.py`](examples/04_help.py).
 
 ### CLI overrides without argparse
 
@@ -283,7 +291,7 @@ cfg = TrainCfg.load("train")
 cfg.update_from_args(args)                 # None values are skipped by default
 ```
 
-> Runnable demos: [`examples/02_cli_overrides.py`](examples/02_cli_overrides.py),
+> Runnable demos: [`examples/01_cli_overrides.py`](examples/01_cli_overrides.py),
 > [`examples/05_argparse.py`](examples/05_argparse.py).
 
 ### Environment variable overrides
@@ -322,7 +330,7 @@ cfg.update_from_cli()
 cfg.freeze()
 ```
 
-> Runnable demo: [`examples/07_env_overrides.py`](examples/07_env_overrides.py).
+> Runnable demo: [`examples/06_env_overrides.py`](examples/06_env_overrides.py).
 
 ### Snapshot the resolved config alongside the experiment
 
@@ -338,7 +346,7 @@ run_dir.mkdir(parents=True, exist_ok=True)
 cfg.save_yaml(run_dir / "config.yaml")     # round-trippable via TrainCfg.load(...)
 ```
 
-> Runnable demo: [`examples/04_freeze_and_snapshot.py`](examples/04_freeze_and_snapshot.py).
+> Runnable demo: [`examples/07_freeze_and_snapshot.py`](examples/07_freeze_and_snapshot.py).
 
 ### Diff configs
 
@@ -410,7 +418,7 @@ run.print_diff_from_defaults()
 Color is on by default when stdout is a tty; pass `color=False` to
 force it off (or `color=True` to keep it on when piping to a file).
 
-> Runnable demo: [`examples/09_diff.py`](examples/09_diff.py).
+> Runnable demo: [`examples/08_diff.py`](examples/08_diff.py).
 
 ### Capture the running code's commit hash
 
@@ -511,7 +519,7 @@ Mechanics:
   the whole chain is merged, so a parent can reference a key that only
   a child supplies.
 
-> Runnable demo: [`examples/08_extends.py`](examples/08_extends.py).
+> Runnable demo: [`examples/09_extends.py`](examples/09_extends.py).
 
 ### Cross-file YAML interpolation
 
@@ -540,7 +548,7 @@ cfg.model.lr = 0.5         # also raises (freeze is recursive)
 print(cfg.epochs)          # reads always work
 ```
 
-> Runnable demo: [`examples/04_freeze_and_snapshot.py`](examples/04_freeze_and_snapshot.py).
+> Runnable demo: [`examples/07_freeze_and_snapshot.py`](examples/07_freeze_and_snapshot.py).
 
 ## Features
 
@@ -631,7 +639,7 @@ onefig install-python-completion <bash|zsh|fish>      # one-time, global
 
 Runnable scripts live in [`examples/`](examples/), with one Python file per
 feature plus a notebook walkthrough. Start with
-[`examples/01_basic.py`](examples/01_basic.py); the complete list is in
+[`examples/02_basic.py`](examples/02_basic.py); the complete list is in
 [`examples/README.md`](examples/README.md).
 
 ## License
@@ -644,7 +652,7 @@ MIT
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=Y5NTgZA-xWE">
-    <img src="assets/lotr/one-ring.png" width="80" alt="The One Ring">
+    <img src="assets/lotr/butmylord.gif" height="80" alt="But my lord, there is no Frodo">
   </a>
   &nbsp;&nbsp;
   <a href="https://youtube.com/shorts/u5sLlWVtC68">

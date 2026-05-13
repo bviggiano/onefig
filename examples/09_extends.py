@@ -8,7 +8,7 @@ current file is deep-merged on top, so you can keep a shared base
 
 Run from the repo root:
 
-    python examples/08_extends.py
+    python examples/09_extends.py
 
 Mechanics worth knowing:
 

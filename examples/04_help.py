@@ -2,9 +2,9 @@
 
 Try these from the repo root:
 
-    python examples/03_help.py --help
-    python examples/03_help.py epochs=20 --help     # --help short-circuits overrides
-    python examples/03_help.py epochs=20 --show     # apply overrides, then print
+    python examples/04_help.py --help
+    python examples/04_help.py epochs=20 --help     # --help short-circuits overrides
+    python examples/04_help.py epochs=20 --show     # apply overrides, then print
 
 Notice how ``Literal`` choices and the ``Loss`` enum members are surfaced
 inline, and field docstrings (PEP 257) become the descriptions automatically.

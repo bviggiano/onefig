@@ -13,9 +13,9 @@ Three flags drive the completion machinery:
 
 Try (from the repo root):
 
-    python examples/06_completion.py --onefig-completions opt
-    python examples/06_completion.py --onefig-install-completion bash
-    python examples/06_completion.py --onefig-install-python-completion bash
+    python examples/03_completion.py --onefig-completions opt
+    python examples/03_completion.py --onefig-install-completion bash
+    python examples/03_completion.py --onefig-install-python-completion bash
 """
 
 from __future__ import annotations
