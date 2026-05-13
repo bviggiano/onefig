@@ -1,4 +1,4 @@
-# Shared base config used by examples/08_extends.py via extends:.
+# Shared base config used by examples/09_extends.py via extends:.
 run_name: ${model.name}-ep${epochs}
 epochs: 10
 model:

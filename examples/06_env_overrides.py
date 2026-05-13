@@ -8,19 +8,19 @@ naturally into a YAML → env → CLI precedence chain.
 Run from the repo root:
 
     # Plain env override
-    MYAPP_EPOCHS=20 python examples/07_env_overrides.py
+    MYAPP_EPOCHS=20 python examples/06_env_overrides.py
 
     # Nested field via __
-    MYAPP_MODEL__NAME=bert-large python examples/07_env_overrides.py
+    MYAPP_MODEL__NAME=bert-large python examples/06_env_overrides.py
 
     # Leaf shortcut (resolves to model.name when unambiguous)
-    MYAPP_NAME=bert-large python examples/07_env_overrides.py
+    MYAPP_NAME=bert-large python examples/06_env_overrides.py
 
     # YAML → env → CLI: CLI wins over env wins over YAML
-    MYAPP_EPOCHS=20 python examples/07_env_overrides.py epochs=50
+    MYAPP_EPOCHS=20 python examples/06_env_overrides.py epochs=50
 
     # JSON-coerced values
-    MYAPP_TAGS='["smoke", "fast"]' python examples/07_env_overrides.py
+    MYAPP_TAGS='["smoke", "fast"]' python examples/06_env_overrides.py
 """
 
 from __future__ import annotations

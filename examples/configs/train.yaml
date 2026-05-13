@@ -1,4 +1,4 @@
-# Sample config used by examples/01_basic.py and examples/02_cli_overrides.py.
+# Sample config used by examples/01_cli_overrides.py and examples/02_basic.py.
 run_name: ${model.name}-ep${epochs}
 epochs: 5
 model:
