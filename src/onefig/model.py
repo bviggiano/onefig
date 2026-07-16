@@ -4,7 +4,7 @@ import dataclasses
 import os
 import sys
 from argparse import Namespace
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -484,9 +484,32 @@ class ConfigModel(BaseModel):
         """
         return flatten(self.model_dump())
 
-    def diff(
-        self, other: ConfigModel | dict[str, Any]
-    ) -> dict[str, tuple[Any, Any]]:
+    def codename(self, *, exclude: Iterable[str] = (), **kwargs: Any) -> str:
+        """Deterministic, memorable code name for this config.
+
+        The same realized config always produces the same code name
+        (content-addressable): the config is dumped, top-level ``exclude`` keys
+        are dropped, and :func:`namekit.name_from_mapping` maps a stable digest
+        of the remainder to a memorable name. Handy for naming training runs,
+        experiments, or sweeps straight from a config. (Named ``codename`` rather
+        than ``name`` to avoid colliding with a config's own ``name`` field.)
+
+        Args:
+            exclude: Top-level field names to omit from the name — e.g. runtime
+                or output fields (``device``, ``output_dir``) that don't define
+                the experiment, so the same experiment names the same regardless
+                of them.
+            **kwargs: Forwarded to :func:`namekit.name` (``suffix``, ``case``,
+                ``franchise``, ...).
+
+        Returns:
+            A memorable name string.
+        """
+        import namekit
+
+        return namekit.name_from_mapping(self.model_dump(), exclude=exclude, **kwargs)
+
+    def diff(self, other: ConfigModel | dict[str, Any]) -> dict[str, tuple[Any, Any]]:
         """Diff this config's leaves against another config or dict.
 
         Returns ``{dotted_path: (self_value, other_value)}`` for every leaf

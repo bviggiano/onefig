@@ -29,6 +29,8 @@ dependencies = [
     "omegaconf>=2.3",
     "pydantic>=2.7",
     "typing-extensions>=4.0",
+    # Temporary: tracks namekit's dev branch; revert to a released "namekit>=X" pin once it lands.
+    "namekit @ git+https://github.com/bviggiano/namekit.git@dev",
 ]
 
 [project.optional-dependencies]

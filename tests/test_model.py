@@ -260,3 +260,20 @@ def test_model_post_init_fires_through_load(tmp_path: Path) -> None:
     # Also fires via from_dict and direct construction
     assert Derived.from_dict({"x": 1, "y": 2}).total == 3
     assert Derived(x=10, y=20).total == 30
+
+
+def test_codename_is_deterministic_and_content_addressable() -> None:
+    class Cfg(ConfigModel):
+        lr: float = 0.1
+        device: str = "cpu"
+        name: str = (
+            "keeps working alongside codename()"  # a `name` field must not collide
+        )
+
+    assert Cfg().codename() == Cfg().codename()  # same config -> same name
+    assert Cfg(lr=0.5).codename() != Cfg().codename()  # identity change -> different
+    # excluded top-level fields don't affect the name
+    excl = ("device",)
+    assert Cfg(device="cuda").codename(exclude=excl) == Cfg().codename(exclude=excl)
+    assert Cfg().codename(suffix=True).count("_") >= 1  # kwargs forwarded to namekit
+    assert Cfg().name == "keeps working alongside codename()"  # field access intact
