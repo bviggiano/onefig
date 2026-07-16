@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 from argparse import Namespace
@@ -24,6 +25,18 @@ from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
 from onefig._overrides import _resolve_keys, _set_dotted, apply_overrides
+
+
+def _dump_value(value: Any) -> Any:
+    """Reduce a default value to plain data for flattening.
+
+    Models and dataclasses become nested dicts; scalars pass through.
+    """
+    if isinstance(value, BaseModel):
+        return value.model_dump()
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    return value
 
 
 class FrozenConfigError(RuntimeError):
@@ -504,30 +517,34 @@ class ConfigModel(BaseModel):
             )
         return compute_diff(self.to_flat_dict(), other_flat)
 
+    def _defaults_flat_dict(self) -> dict[str, Any]:
+        """Flat dotted-key dict of the schema's default leaf values.
+
+        Built field by field from :attr:`model_fields` rather than by
+        constructing a default instance, so classes with required fields are
+        supported. A required field (no default) contributes no key, so it
+        surfaces as "specified" against the current config.
+        """
+        defaults: dict[str, Any] = {}
+        for name, field in type(self).model_fields.items():
+            if field.is_required():
+                continue
+            defaults[name] = _dump_value(field.get_default(call_default_factory=True))
+        return flatten(defaults)
+
     def diff_from_defaults(self) -> dict[str, tuple[Any, Any]]:
-        """Diff this config against a default-constructed instance of its type.
+        """Diff this config against its schema defaults.
 
         Useful for surfacing which fields a run actually overrode versus
-        what the schema would have produced on its own.
+        what the schema would have produced on its own. Required fields (which
+        have no default) are reported as specified, with
+        :data:`onefig.MISSING` on the default side.
 
         Returns:
             Ordered mapping of changed leaf paths to ``(default, current)``
             tuples. Empty when the config matches its schema defaults.
-
-        Raises:
-            ValueError: If the config class has required fields with no
-                defaults (so a default instance can't be built). Use
-                :meth:`diff` against an explicit baseline instead.
         """
-        try:
-            default = type(self)()
-        except Exception as exc:
-            raise ValueError(
-                f"{type(self).__name__} has required fields with no defaults, "
-                "so diff_from_defaults() can't build a baseline. Use "
-                "cfg.diff(other_cfg) against an explicit baseline instead."
-            ) from exc
-        return default.diff(self)
+        return compute_diff(self._defaults_flat_dict(), self.to_flat_dict())
 
     def format_diff(
         self,
@@ -573,22 +590,10 @@ class ConfigModel(BaseModel):
         Args:
             color: ``True`` / ``False`` to force ANSI on or off. ``None``
                 (default) auto-detects via ``sys.stdout.isatty()``.
-
-        Raises:
-            ValueError: If the config class has required fields with no
-                defaults (so a default instance can't be built).
         """
-        try:
-            default = type(self)()
-        except Exception as exc:
-            raise ValueError(
-                f"{type(self).__name__} has required fields with no defaults, "
-                "so format_diff_from_defaults() can't build a baseline. Use "
-                "cfg.format_diff(other_cfg) against an explicit baseline."
-            ) from exc
         return format_against_defaults(
             self.to_flat_dict(),
-            default.to_flat_dict(),
+            self._defaults_flat_dict(),
             color=color,
         )
 

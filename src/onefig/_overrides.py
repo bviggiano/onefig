@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from pydantic import BaseModel
@@ -15,7 +16,8 @@ def apply_overrides(
 
     Keys may be full dotted paths (e.g. ``"optimizer.lr"``) or unambiguous
     leaf names (e.g. ``"lr"``). Full-path matches take precedence over
-    leaf-name matches.
+    leaf-name matches. Paths may descend through nested models and through
+    plain dataclass fields (e.g. a dataclass held by a discriminated union).
 
     Args:
         model: A Pydantic model instance to mutate.
@@ -71,19 +73,70 @@ def _resolve_keys(model: BaseModel) -> dict[str, list[str]]:
     return out
 
 
-def _iter_full_paths(model: BaseModel, prefix: str = ""):
-    for name in type(model).model_fields:
-        full = f"{prefix}{name}"
-        value = getattr(model, name)
-        if isinstance(value, BaseModel):
-            yield from _iter_full_paths(value, full + ".")
-        else:
-            yield full
+def _child_field_names(node: Any) -> list[str] | None:
+    """Return the child field names of a structured node, or ``None`` for a leaf.
+
+    Recurses through Pydantic models and plain dataclass instances alike, so
+    a dataclass field's subfields are addressable as override paths. Anything
+    else (scalars, tuples, lists, mappings) is treated as a leaf.
+    """
+    if isinstance(node, BaseModel):
+        return list(type(node).model_fields)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return [f.name for f in dataclasses.fields(node)]
+    return None
+
+
+def _iter_full_paths(node: Any, prefix: str = ""):
+    """Yield the dotted path of every leaf field, reading the live instance.
+
+    Only the values actually present are enumerated, so a discriminated union
+    contributes the fields of its current variant.
+    """
+    names = _child_field_names(node)
+    if names is None:
+        yield prefix[:-1]  # strip the trailing separator left by the parent
+        return
+    for name in names:
+        yield from _iter_full_paths(getattr(node, name), f"{prefix}{name}.")
 
 
 def _set_dotted(model: BaseModel, dotted_path: str, value: Any) -> None:
+    """Assign ``value`` at ``dotted_path``, routing through the owning model.
+
+    Descends through nested models to the deepest one on the path. If the
+    remaining segments address a plain dataclass field, the dataclass value is
+    rebuilt with the override merged in and reassigned to its model field, so
+    that model's ``validate_assignment`` re-runs coercion and validation on the
+    whole field (for a discriminated union, that re-discriminates and re-checks
+    the variant). Otherwise the leaf is assigned directly.
+    """
     parts = dotted_path.split(".")
-    obj: Any = model
-    for part in parts[:-1]:
-        obj = getattr(obj, part)
-    setattr(obj, parts[-1], value)
+    parent: Any = model
+    idx = 0
+    while idx < len(parts) - 1 and isinstance(getattr(parent, parts[idx]), BaseModel):
+        parent = getattr(parent, parts[idx])
+        idx += 1
+
+    field_name = parts[idx]
+    rest = parts[idx + 1 :]
+    if not rest:
+        setattr(parent, field_name, value)
+        return
+
+    merged = _merge_into(getattr(parent, field_name), rest, value)
+    setattr(parent, field_name, merged)
+
+
+def _merge_into(node: Any, path: list[str], value: Any) -> dict[str, Any]:
+    """Return ``node`` as a nested dict with ``path`` set to ``value``.
+
+    ``node`` is a dataclass instance; ``dataclasses.asdict`` gives a plain,
+    fully-owned mapping that Pydantic can re-validate on assignment.
+    """
+    data = dataclasses.asdict(node)
+    cursor = data
+    for key in path[:-1]:
+        cursor = cursor[key]
+    cursor[path[-1]] = value
+    return data

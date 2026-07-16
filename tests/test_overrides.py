@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 from argparse import Namespace
+from dataclasses import dataclass
+from typing import Literal
 
 import pytest
+from pydantic import ValidationError
 
-from onefig import ConfigModel
+from onefig import ConfigModel, tagged_union
 
 
 class _Sub(ConfigModel):
@@ -192,3 +195,83 @@ def test_top_level_full_path_beats_nested_leaf() -> None:
     cfg.update_from_args({"lr": 0.9})  # matches top-level "lr" full path
     assert cfg.lr == 0.9
     assert cfg.inner.lr == 0.1
+
+
+# ---- overrides into dataclass fields ---------------------------------------
+
+
+@dataclass
+class _Adam:
+    name: Literal["adam"] = "adam"
+    lr: float = 1e-3
+
+    def __post_init__(self) -> None:
+        if self.lr <= 0:
+            raise ValueError("lr must be > 0")
+
+
+@dataclass
+class _SGD:
+    name: Literal["sgd"] = "sgd"
+    lr: float = 1e-2
+    momentum: float = 0.9
+
+
+_Optimizer = tagged_union(_Adam, _SGD)
+
+
+class _Trainer(ConfigModel):
+    optimizer: _Optimizer = _Adam()
+    betas: tuple[float, float] = (0.9, 0.999)
+
+
+class _HoldsPlainDataclass(ConfigModel):
+    # A dataclass that is not part of a union, held directly by a field.
+    optimizer: _Adam = _Adam()
+
+
+def test_override_dataclass_field_via_dotted_path() -> None:
+    cfg = _Trainer()
+    cfg.update_from_args({"optimizer.lr": 0.5})
+    assert isinstance(cfg.optimizer, _Adam)
+    assert cfg.optimizer.lr == 0.5
+
+
+def test_override_dataclass_field_via_leaf_shortcut() -> None:
+    cfg = _Trainer()
+    cfg.update_from_args({"lr": 0.25})
+    assert cfg.optimizer.lr == 0.25
+
+
+def test_override_dataclass_field_reruns_post_init_bounds() -> None:
+    cfg = _Trainer()
+    with pytest.raises(ValidationError):
+        cfg.update_from_args({"optimizer.lr": -1.0})
+
+
+def test_override_dataclass_field_coerces_value() -> None:
+    cfg = _Trainer()
+    cfg.update_from_args({"optimizer.lr": "0.5"})  # string, as CLI would supply
+    assert cfg.optimizer.lr == 0.5
+    assert isinstance(cfg.optimizer.lr, float)
+
+
+def test_override_preserves_untouched_dataclass_fields() -> None:
+    cfg = _Trainer()
+    cfg.optimizer = _SGD()  # select the other variant
+    cfg.update_from_args({"momentum": 0.5})
+    assert isinstance(cfg.optimizer, _SGD)
+    assert cfg.optimizer.momentum == 0.5
+    assert cfg.optimizer.lr == 1e-2  # untouched default retained
+
+
+def test_override_plain_dataclass_field() -> None:
+    cfg = _HoldsPlainDataclass()
+    cfg.update_from_args({"optimizer.lr": 0.5})
+    assert cfg.optimizer.lr == 0.5
+
+
+def test_dataclass_leaf_offered_as_attribute() -> None:
+    cfg = _Trainer()
+    cfg.optimizer.lr = 0.02  # direct write on the dataclass instance
+    assert cfg.optimizer.lr == 0.02
