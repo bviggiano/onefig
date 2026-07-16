@@ -20,6 +20,7 @@ from onefig._completion import (
 )
 from onefig._diff import compute_diff, format_against_defaults, format_diff
 from onefig._env import parse_env
+from onefig._errors import clean_validation_errors
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
@@ -128,12 +129,12 @@ class ConfigModel(BaseModel):
         Raises:
             FileNotFoundError: If a bare name resolves to no file.
             ValueError: If a bare name resolves to multiple files.
-            pydantic.ValidationError: If the YAML contents do not match
-                the schema.
+            ConfigError: If the YAML contents do not match the schema.
         """
         path = resolve_path(name_or_path, search_root=search_root)
         data = load_yaml(path)
-        instance = cls.model_validate(data)
+        with clean_validation_errors(cls, name=config_name or path.stem):
+            instance = cls.model_validate(data)
         object.__setattr__(instance, "_config_name", config_name or path.stem)
         return instance
 
@@ -147,7 +148,8 @@ class ConfigModel(BaseModel):
         Returns:
             A validated instance of ``cls``.
         """
-        return cls.model_validate(data)
+        with clean_validation_errors(cls):
+            return cls.model_validate(data)
 
     @classmethod
     def from_flat_dict(cls, flat: dict[str, Any]) -> Self:
@@ -163,7 +165,8 @@ class ConfigModel(BaseModel):
         Returns:
             A validated instance of ``cls``.
         """
-        return cls.model_validate(unflatten(flat))
+        with clean_validation_errors(cls):
+            return cls.model_validate(unflatten(flat))
 
     def update_from_args(
         self,
@@ -198,8 +201,8 @@ class ConfigModel(BaseModel):
         Raises:
             ValueError: If a leaf key is ambiguous, or (when ``strict``) if
                 a key is unknown.
-            pydantic.ValidationError: If a value fails type validation at
-                the destination field.
+            ConfigError: If a value fails type validation at the
+                destination field.
         """
         if isinstance(args, Namespace):
             raw = vars(args)
@@ -207,7 +210,8 @@ class ConfigModel(BaseModel):
             raw = dict(args)
         if skip_none:
             raw = {k: v for k, v in raw.items() if v is not None}
-        apply_overrides(self, raw, strict=strict)
+        with clean_validation_errors(type(self), name=self._config_name):
+            apply_overrides(self, raw, strict=strict)
 
     def update_from_env(
         self,
@@ -251,8 +255,8 @@ class ConfigModel(BaseModel):
         Raises:
             ValueError: For malformed env var names (empty key segments),
                 ambiguous leaf keys, or (when ``strict``) unknown keys.
-            pydantic.ValidationError: If a value fails type validation at
-                the destination field.
+            ConfigError: If a value fails type validation at the
+                destination field.
         """
         env = os.environ if environ is None else environ
         overrides = parse_env(
@@ -261,7 +265,8 @@ class ConfigModel(BaseModel):
             delimiter=delimiter,
             case_sensitive=case_sensitive,
         )
-        apply_overrides(self, overrides, strict=strict)
+        with clean_validation_errors(type(self), name=self._config_name):
+            apply_overrides(self, overrides, strict=strict)
 
     def update_from_cli(
         self,
@@ -320,8 +325,8 @@ class ConfigModel(BaseModel):
         Raises:
             ValueError: For malformed tokens, ambiguous leaf keys, or (when
                 ``strict``) unknown keys.
-            pydantic.ValidationError: If a value fails type validation at
-                the destination field.
+            ConfigError: If a value fails type validation at the
+                destination field.
             SystemExit: If ``--show``, ``--help`` / ``-h``, or one of the
                 completion flags was passed and the corresponding
                 ``exit_on_*`` flag is ``True``.
@@ -366,7 +371,8 @@ class ConfigModel(BaseModel):
         tokens = [t for t in tokens if t != "--show"]
 
         overrides = parse_overrides(tokens)
-        apply_overrides(self, overrides, strict=strict)
+        with clean_validation_errors(type(self), name=self._config_name):
+            apply_overrides(self, overrides, strict=strict)
 
         if show_requested:
             self.display()

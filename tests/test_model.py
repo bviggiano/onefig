@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from onefig import ConfigModel
+from onefig import ConfigError, ConfigModel
 from onefig.model import FrozenConfigError
 
 
@@ -31,14 +31,14 @@ def test_load_validates(tmp_path: Path) -> None:
 def test_load_type_error(tmp_path: Path) -> None:
     p = tmp_path / "c.yaml"
     p.write_text("epochs: not_an_int\n")
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         Cfg.load(p)
 
 
 def test_extra_forbid(tmp_path: Path) -> None:
     p = tmp_path / "c.yaml"
     p.write_text("epochs: 5\nunknown_field: 1\n")
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         Cfg.load(p)
 
 

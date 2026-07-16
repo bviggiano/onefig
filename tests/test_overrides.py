@@ -8,7 +8,7 @@ from typing import Literal
 import pytest
 from pydantic import ValidationError
 
-from onefig import ConfigModel, tagged_union
+from onefig import ConfigError, ConfigModel, tagged_union
 
 
 class _Sub(ConfigModel):
@@ -88,9 +88,7 @@ def test_dotted_resolves_ambiguity() -> None:
 
 def test_override_revalidates() -> None:
     cfg = _Cfg()
-    from pydantic import ValidationError
-
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         cfg.update_from_args({"lr": "not_a_float"})
 
 
@@ -129,7 +127,6 @@ def test_attribute_read_uses_leaf_key_shortcut() -> None:
 
 
 def test_attribute_unknown_name_still_raises() -> None:
-    from pydantic import ValidationError
 
     cfg = _Cfg()
     with pytest.raises(AttributeError):
@@ -157,7 +154,6 @@ def test_attribute_ambiguous_leaf_raises() -> None:
 
 
 def test_attribute_shortcut_revalidates() -> None:
-    from pydantic import ValidationError
 
     cfg = _Cfg()
     with pytest.raises(ValidationError):
@@ -245,7 +241,7 @@ def test_override_dataclass_field_via_leaf_shortcut() -> None:
 
 def test_override_dataclass_field_reruns_post_init_bounds() -> None:
     cfg = _Trainer()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         cfg.update_from_args({"optimizer.lr": -1.0})
 
 

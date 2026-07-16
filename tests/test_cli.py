@@ -77,10 +77,10 @@ def test_update_from_cli_uses_argv_by_default(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_update_from_cli_revalidates() -> None:
-    from pydantic import ValidationError
+    from onefig import ConfigError
 
     cfg = _Cfg()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         cfg.update_from_cli(["epochs=not_an_int"])
 
 

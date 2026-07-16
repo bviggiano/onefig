@@ -138,10 +138,10 @@ def test_update_from_env_non_strict_skips_unknown() -> None:
 
 
 def test_update_from_env_type_validation() -> None:
-    from pydantic import ValidationError
+    from onefig import ConfigError
 
     cfg = Cfg()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         cfg.update_from_env(
             "MYAPP_", environ={"MYAPP_EPOCHS": "not_an_int"}
         )
