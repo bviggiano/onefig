@@ -15,7 +15,7 @@ More may be added over time (other experiment trackers, schedulers, etc.).
 
 ---
 
-## <img src="wandb-logo.svg" alt="W&B" height="18"> Weights & Biases
+## <img src="../../../assets/wandb-logo.svg" alt="W&B" height="18"> Weights & Biases
 
 `WandbSweepConfig` models the [wandb sweep configuration
 format](https://docs.wandb.ai/guides/sweeps/define-sweep-configuration). wandb's sweep schema is precise and
@@ -47,6 +47,26 @@ A malformed sweep is reported before it ever reaches wandb:
   (log-space ones must be `> 0`), `normal`/`log_normal` need `mu`/`sigma`, quantized `q_*` distributions need
   `q`, and `categorical` needs `values` (with matching `probabilities` that sum to 1).
 
-`to_wandb()` returns the plain dict `wandb.sweep()` expects. Validating the swept parameter *paths and values*
-against a specific onefig config schema (does `optimizer.lr` exist? is the value within its bounds?) is a
-separate, optional layer built on top of this.
+`to_wandb()` returns the plain dict `wandb.sweep()` expects.
+
+### Validate against your config
+
+The checks above are about the sweep *format*. You can go further and validate a sweep against a **specific**
+config with `validate_against`, which applies each swept value to your config and runs its real validation:
+
+```python
+sweep.validate_against(MyRunConfig.load("base.yaml"), logged_metrics={"val/loss", "val/accuracy"})
+```
+
+It reports — all at once, before the sweep launches — a swept value outside a field's bounds, an invalid
+`Literal` choice, a wrong type, a parameter *path* that doesn't exist (with a did-you-mean suggestion), and a
+`metric.name` that isn't among your logged metrics:
+
+```
+✗ Sweep incompatible with RunConfig — 2 problem(s):
+  - trainer.batch_size value=0 is rejected: Input should be greater than 0
+  - unknown parameter 'optimzer.lr' — did you mean 'optimizer.lr'?
+```
+
+Because it routes values through the target config's own validators, it catches everything that config would
+reject — bounds, enums, types, and cross-field constraints — with no rules duplicated here.

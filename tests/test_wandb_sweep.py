@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-from pydantic import ValidationError
+from typing import Literal
 
+import pytest
+from pydantic import Field, ValidationError
+
+from onefig import ConfigError, ConfigModel
 from onefig.integrations.wandb import WandbSweepConfig
 
 VALID = [
@@ -173,3 +176,71 @@ def test_load_reports_field_tree(tmp_path) -> None:  # type: ignore[no-untyped-d
     with pytest.raises(ConfigError) as excinfo:
         WandbSweepConfig.load(str(sweep))
     assert "metric" in str(excinfo.value)
+
+
+class _Optimizer(ConfigModel):
+    lr: float = Field(1e-3, gt=0)
+    name: Literal["adamw", "adam", "sgd"] = "adamw"
+
+
+class _Run(ConfigModel):
+    optimizer: _Optimizer = _Optimizer()
+    batch_size: int = Field(8, gt=0)
+
+
+def test_validate_against_accepts_a_compatible_sweep() -> None:
+    sweep = WandbSweepConfig.model_validate(
+        {
+            "method": "random",
+            "parameters": {
+                "optimizer.lr": {"min": 1e-5, "max": 1e-2},
+                "optimizer.name": {"values": ["adamw", "adam"]},
+                "batch_size": {"values": [8, 16]},
+            },
+        }
+    )
+    sweep.validate_against(_Run())  # no raise
+
+
+@pytest.mark.parametrize(
+    "params,message",
+    [
+        ({"batch_size": {"values": [0, 8]}}, "greater than 0"),  # bound
+        ({"optimizer.name": {"values": ["adamww"]}}, "adamw"),  # bad Literal
+        ({"optimizer.lr": {"min": -1, "max": 1}}, "greater than 0"),  # range endpoint
+        ({"optimzer.lr": {"value": 0.1}}, "did you mean 'optimizer.lr'"),  # typo'd path
+    ],
+)
+def test_validate_against_flags_incompatible_values(params: dict, message: str) -> None:
+    sweep = WandbSweepConfig.model_validate({"method": "random", "parameters": params})
+    with pytest.raises(ConfigError) as excinfo:
+        sweep.validate_against(_Run())
+    assert message in str(excinfo.value)
+
+
+def test_validate_against_reports_every_problem() -> None:
+    sweep = WandbSweepConfig.model_validate(
+        {
+            "method": "random",
+            "parameters": {
+                "batch_size": {"values": [0]},
+                "optimizer.name": {"values": ["nope"]},
+            },
+        }
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        sweep.validate_against(_Run())
+    assert "2 problem" in str(excinfo.value)
+
+
+def test_validate_against_checks_metric_name() -> None:
+    sweep = WandbSweepConfig.model_validate(
+        {
+            "method": "bayes",
+            "metric": {"name": "val/losss", "goal": "minimize"},
+            "parameters": {"batch_size": {"values": [8]}},
+        }
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        sweep.validate_against(_Run(), logged_metrics={"val/loss", "val/acc"})
+    assert "did you mean 'val/loss'" in str(excinfo.value)

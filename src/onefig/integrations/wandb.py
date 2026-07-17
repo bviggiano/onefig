@@ -11,11 +11,15 @@ wandb and adds no dependency.
 
 from __future__ import annotations
 
+import difflib
+from collections.abc import Iterable, Iterator
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from typing_extensions import Self
 
+from onefig._errors import ConfigError
+from onefig._overrides import _resolve_keys, _set_dotted
 from onefig.model import ConfigModel
 
 # Distributions that draw from a numeric [min, max] range.
@@ -101,6 +105,31 @@ class SweepParameter(BaseModel):
             or self.values is not None
             or self.distribution in ("constant", "categorical")
         )
+
+    @property
+    def is_nested(self) -> bool:
+        """Whether this is a nested ``parameters`` group rather than a leaf."""
+        return self.parameters is not None
+
+    def candidate_values(self) -> list[tuple[Any, str]]:
+        """Representative ``(value, role)`` pairs to probe against a target field.
+
+        The endpoints/choices where a target's bounds or Literal set would be
+        violated: each of ``values``, the constant ``value``, the ``min``/``max``
+        of a range, or the ``mu`` of a normal distribution.
+        """
+        if self.value is not None:
+            return [(self.value, "value")]
+        if self.values is not None:
+            return [(item, "value") for item in self.values]
+        out: list[tuple[Any, str]] = []
+        if self.min is not None:
+            out.append((self.min, "min"))
+        if self.max is not None:
+            out.append((self.max, "max"))
+        if self.mu is not None:
+            out.append((self.mu, "mu"))
+        return out
 
     def _set_scalar_keys(self) -> set[str]:
         return {key for key in _SCALAR_KEYS if getattr(self, key) is not None}
@@ -234,3 +263,67 @@ class WandbSweepConfig(ConfigModel):
     def to_wandb(self) -> dict[str, Any]:
         """The plain dict ``wandb.sweep()`` expects (unset keys dropped)."""
         return self.model_dump(exclude_none=True)
+
+    def _leaf_parameters(self) -> Iterator[tuple[str, SweepParameter]]:
+        for path, param in self.parameters.items():
+            if param.is_nested and param.parameters is not None:
+                for sub, child in param.parameters.items():
+                    yield f"{path}.{sub}", child
+            else:
+                yield path, param
+
+    def validate_against(
+        self, base: ConfigModel, *, logged_metrics: Iterable[str] | None = None
+    ) -> None:
+        """Check this sweep's parameters against a concrete config instance ``base``.
+
+        Every swept value is applied to a copy of ``base`` and run through its
+        validation, so a value outside a field's bounds, an invalid Literal choice,
+        a wrong type, or a broken cross-field constraint is caught — along with
+        parameter *paths* that don't exist on ``base`` (with a suggestion). When
+        ``logged_metrics`` is given, ``metric.name`` is checked against it too.
+        Raises :class:`ConfigError` listing every problem found; a no-op if the
+        sweep is fully compatible.
+        """
+        valid_paths = {path for paths in _resolve_keys(base).values() for path in paths}
+        problems: list[str] = []
+        for path, param in self._leaf_parameters():
+            if path not in valid_paths:
+                problems.append(
+                    f"unknown parameter {path!r}{_did_you_mean(path, valid_paths)}"
+                )
+                continue
+            for value, role in param.candidate_values():
+                trial = base.model_copy(deep=True)
+                try:
+                    _set_dotted(trial, path, value)
+                except (ValidationError, ValueError) as exc:
+                    problems.append(
+                        f"{path} {role}={value!r} is rejected: {_reason(exc)}"
+                    )
+        if logged_metrics is not None and self.metric is not None:
+            names = set(logged_metrics)
+            if self.metric.name not in names:
+                problems.append(
+                    f"metric.name {self.metric.name!r} is not a logged metric"
+                    f"{_did_you_mean(self.metric.name, names)}"
+                )
+        if problems:
+            name = type(base).__name__
+            header = f"Sweep incompatible with {name} — {len(problems)} problem(s):"
+            raise ConfigError(
+                header + "".join(f"\n  - {problem}" for problem in problems)
+            )
+
+
+def _did_you_mean(name: str, options: Iterable[str]) -> str:
+    match = difflib.get_close_matches(name, list(options), n=1)
+    return f" — did you mean {match[0]!r}?" if match else ""
+
+
+def _reason(exc: Exception) -> str:
+    if isinstance(exc, ValidationError):
+        errors = exc.errors()
+        if errors:
+            return str(errors[0].get("msg", exc))
+    return str(exc).splitlines()[0]
