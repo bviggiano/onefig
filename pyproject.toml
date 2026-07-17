@@ -53,6 +53,10 @@ onefig = "onefig._cli_entry:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/onefig"]
 
+# Allow the temporary `namekit @ git+...` direct dependency to build (dropped once namekit is on PyPI).
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.black]
 line-length = 88
 target-version = ["py39"]
