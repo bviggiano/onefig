@@ -584,6 +584,20 @@ print(cfg.epochs)          # reads always work
 - **Auto commit hash** — `cfg.commit_hash` captures the running code's
   `git HEAD` on construction (best-effort; `None` when unavailable).
 
+## Integrations
+
+Typed configs for the file **formats** of external tools live under
+[`onefig.integrations`](src/onefig/integrations/README.md). Each models a tool's
+*format* only, so importing one never requires the tool to be installed.
+
+<a href="src/onefig/integrations/README.md"><img src="assets/wandb-logo.svg" alt="Weights & Biases" height="22"></a>
+
+**Weights & Biases** — `WandbSweepConfig` validates a wandb sweep config the moment
+you load it: malformed distributions, a continuous range under grid search, a metric
+that isn't logged, or a swept value outside your own config's bounds are all caught
+before the sweep launches. See the
+[integrations README](src/onefig/integrations/README.md) for details.
+
 ## API reference
 
 ```python
