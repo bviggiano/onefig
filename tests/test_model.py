@@ -97,6 +97,37 @@ def test_display_prints(capsys: pytest.CaptureFixture[str]) -> None:
     assert "epochs" in captured.out
 
 
+def test_display_sections_default_empty(capsys: pytest.CaptureFixture[str]) -> None:
+    cfg = Cfg(epochs=2, model=Sub(lr=0.1, name="z"))
+    assert cfg.display_sections() == []
+    cfg.display(name="MyCfg")
+    assert "MyCfg:" in capsys.readouterr().out  # tree only, no extra blocks
+
+
+def test_display_renders_many_sections_below_the_tree(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class WithSections(Cfg):
+        def display_sections(self) -> list[str]:
+            return ["Section A:\n  aaa", "Section B:\n  bbb"]
+
+    WithSections(epochs=2, model=Sub(lr=0.1, name="z")).display(name="MyCfg")
+    out = capsys.readouterr().out
+    assert "MyCfg:" in out  # the config tree
+    assert "Section A:\n  aaa" in out and "Section B:\n  bbb" in out  # multiple blocks
+    assert out.index("epochs") < out.index("Section A") < out.index("Section B")
+
+
+def test_display_appends_call_time_sections(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = Cfg(epochs=2, model=Sub(lr=0.1, name="z"))
+    cfg.display(name="MyCfg", sections=["Ad hoc:\n  custom input"])
+    out = capsys.readouterr().out
+    assert "Ad hoc:\n  custom input" in out
+    assert out.index("epochs") < out.index("Ad hoc")
+
+
 def test_config_name_defaults_to_none() -> None:
     cfg = Cfg()
     assert cfg.config_name is None

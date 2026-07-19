@@ -668,15 +668,39 @@ class ConfigModel(BaseModel):
         """
         return self._frozen
 
-    def display(self, name: str | None = None) -> None:
-        """Print this config as an ASCII tree to stdout.
+    def display_sections(self) -> list[str]:
+        """Extra blocks to print after the config tree in :meth:`display` / ``--show``.
+
+        Override in a subclass to surface derived, human-readable views that are *not*
+        config fields — for example an effective scheme computed from several fields.
+        Return as many blocks as you like; each is printed as its own block below the
+        tree, and the subclass owns its formatting. The base config adds none.
+
+        Returns:
+            Rendered sections, in the order they should appear (empty by default).
+        """
+        return []
+
+    def display(
+        self, name: str | None = None, *, sections: Iterable[str] = ()
+    ) -> None:
+        """Print this config as an ASCII tree to stdout, then any custom sections.
+
+        The tree is the config's fields. Below it, derived views are printed as separate
+        blocks so they never look like fields: first this config's own
+        :meth:`display_sections` (empty by default), then any ``sections`` passed in at
+        call time. Both accept as many blocks as you like, each formatted by the caller.
 
         Args:
             name: Title for the root of the tree. Defaults to
                 :attr:`config_name` if set, else ``"Config"``.
+            sections: Additional pre-rendered blocks to append, for callers that build
+                display content dynamically rather than via :meth:`display_sections`.
         """
         title = name or self._config_name or "Config"
         print(format_tree(self.model_dump(), name=title))
+        for section in (*self.display_sections(), *sections):
+            print(f"\n{section}")
 
     def __setattr__(self, name: str, value: Any) -> None:
         if getattr(self, "_frozen", False):
