@@ -34,6 +34,27 @@ def test_parse_overrides_list_value() -> None:
     assert parse_overrides(["tags=[1,2,3]"]) == {"tags": [1, 2, 3]}
 
 
+def test_parse_overrides_bare_word_list() -> None:
+    # A bracketed list of unquoted strings needs no per-element JSON quoting.
+    assert parse_overrides(["tags=[a,b,c]"]) == {"tags": ["a", "b", "c"]}
+    assert parse_overrides(["m=[LayerNorm, prediction_head]"]) == {
+        "m": ["LayerNorm", "prediction_head"]
+    }
+
+
+def test_parse_overrides_bare_list_coerces_elements() -> None:
+    # Each bare element is coerced in turn, so a list may mix types.
+    assert parse_overrides(["x=[a,1,true]"]) == {"x": ["a", 1, True]}
+
+
+def test_parse_overrides_empty_and_quoted_list_unaffected() -> None:
+    # An empty bracket is the empty list, and a JSON-quoted list still parses as before.
+    assert parse_overrides(["x=[]"]) == {"x": []}
+    assert parse_overrides(['x=["a,b"]']) == {
+        "x": ["a,b"]
+    }  # commas inside a quoted element stay intact
+
+
 def test_parse_overrides_missing_equals_raises() -> None:
     with pytest.raises(ValueError, match="expected key=value"):
         parse_overrides(["foo"])

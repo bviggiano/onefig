@@ -9,8 +9,11 @@ def parse_overrides(tokens: list[str]) -> dict[str, Any]:
 
     Values are coerced with best-effort JSON parsing (so ``5`` → int, ``5.0``
     → float, ``true`` / ``false`` → bool, ``null`` → ``None``, ``[1,2]`` →
-    list) and fall back to the raw string. Pydantic re-validates at
-    assignment, so the coercion is a hint, not a contract.
+    list). A bracketed value whose elements are not valid JSON is parsed as a
+    list of bare, comma-separated items (``[a, b]`` → ``["a", "b"]``), so CLI
+    lists of strings need no per-element quoting. Anything else falls back to
+    the raw string. Pydantic re-validates at assignment, so the coercion is a
+    hint, not a contract.
 
     Args:
         tokens: List of CLI tokens, each of the form ``key=value``.
@@ -38,4 +41,12 @@ def _coerce(raw: str) -> Any:
     try:
         return json.loads(raw)
     except (ValueError, json.JSONDecodeError):
-        return raw
+        pass
+    # A bracketed value whose elements are not valid JSON is treated as a list of bare,
+    # comma-separated items: ``[a, b]`` -> ``["a", "b"]`` — so a CLI string list needs
+    # no per-element quoting; each element is coerced (``[a, 1, true]`` -> mixed types).
+    # An element with a comma (e.g. a regex ``{n,m}``) still needs JSON quoting.
+    if len(raw) >= 2 and raw[0] == "[" and raw[-1] == "]":
+        inner = raw[1:-1].strip()
+        return [_coerce(part.strip()) for part in inner.split(",")] if inner else []
+    return raw
