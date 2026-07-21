@@ -131,8 +131,6 @@ def _dicts_to_lists(value: Any) -> Any:
     if converted and all(k.isdigit() for k in converted):
         indices = sorted(int(k) for k in converted)
         if indices != list(range(len(indices))):
-            raise ValueError(
-                f"List indices are sparse or non-zero-based: {indices}."
-            )
+            raise ValueError(f"List indices are sparse or non-zero-based: {indices}.")
         return [converted[str(i)] for i in indices]
     return converted

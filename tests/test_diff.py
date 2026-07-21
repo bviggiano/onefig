@@ -177,10 +177,7 @@ def test_format_diff_basic_alignment() -> None:
     }
     out = format_diff(diff, color=False)
     # Side-by-side: key  old  →  new, with old column padded.
-    assert out == (
-        "  epochs    10      →  20\n"
-        "  model.lr  0.0001  →  0.001"
-    )
+    assert out == ("  epochs    10      →  20\n  model.lr  0.0001  →  0.001")
 
 
 def test_format_diff_renders_missing_on_added_side() -> None:
@@ -199,9 +196,9 @@ def test_format_diff_renders_missing_on_removed_side() -> None:
 
 def test_format_diff_color_applies_ansi_codes() -> None:
     out = format_diff({"epochs": (10, 20)}, color=True)
-    assert "\033[31m" in out   # red for old
-    assert "\033[32m" in out   # green for new
-    assert "\033[0m" in out    # reset
+    assert "\033[31m" in out  # red for old
+    assert "\033[32m" in out  # green for new
+    assert "\033[0m" in out  # reset
 
 
 def test_format_diff_color_off_strips_ansi() -> None:
@@ -211,7 +208,7 @@ def test_format_diff_color_off_strips_ansi() -> None:
 
 def test_format_diff_missing_is_dimmed_when_colored() -> None:
     out = format_diff({"k": (MISSING, "v")}, color=True)
-    assert "\033[2m" in out   # dim for the MISSING placeholder
+    assert "\033[2m" in out  # dim for the MISSING placeholder
 
 
 # ---- ConfigModel.format_diff / print_diff ----------------------------------
@@ -220,9 +217,7 @@ def test_format_diff_missing_is_dimmed_when_colored() -> None:
 def test_format_diff_method_round_trips_via_diff() -> None:
     a = Cfg(epochs=10)
     b = Cfg(epochs=20)
-    assert a.format_diff(b, color=False) == format_diff(
-        a.diff(b), color=False
-    )
+    assert a.format_diff(b, color=False) == format_diff(a.diff(b), color=False)
 
 
 def test_print_diff_writes_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
@@ -280,8 +275,8 @@ def test_format_against_defaults_overridden_row_is_red_to_green() -> None:
         defaults={"a": 1},
         color=True,
     )
-    assert "\033[31m" in out   # red for default
-    assert "\033[32m" in out   # green for current
+    assert "\033[31m" in out  # red for default
+    assert "\033[32m" in out  # green for current
     assert "→" in out
 
 

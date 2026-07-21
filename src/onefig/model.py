@@ -681,9 +681,7 @@ class ConfigModel(BaseModel):
         """
         return []
 
-    def display(
-        self, name: str | None = None, *, sections: Iterable[str] = ()
-    ) -> None:
+    def display(self, name: str | None = None, *, sections: Iterable[str] = ()) -> None:
         """Print this config as an ASCII tree to stdout, then any custom sections.
 
         The tree is the config's fields. Below it, derived views are printed as separate

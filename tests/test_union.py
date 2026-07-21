@@ -51,9 +51,7 @@ def test_selected_variant_is_validated() -> None:
 
 
 def test_custom_tag_name() -> None:
-    cfg = AppConfig.model_validate(
-        {"store": {"backend": "local", "path": "/tmp"}}
-    )
+    cfg = AppConfig.model_validate({"store": {"backend": "local", "path": "/tmp"}})
     assert isinstance(cfg.store, Local) and cfg.store.path == "/tmp"
 
 
