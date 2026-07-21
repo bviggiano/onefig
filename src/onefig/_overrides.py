@@ -19,6 +19,11 @@ def apply_overrides(
     leaf-name matches. Paths may descend through nested models and through
     plain dataclass fields (e.g. a dataclass held by a discriminated union).
 
+    All overrides are merged into the config and validated in a **single
+    pass**, so a ``model_validator`` (e.g. a cross-field ``lo < hi`` check)
+    always sees the fully-applied config, never a half-updated intermediate.
+    The outcome is therefore independent of the order the keys are given.
+
     Args:
         model: A Pydantic model instance to mutate.
         args: Flat mapping of override keys to values.
@@ -28,10 +33,42 @@ def apply_overrides(
     Raises:
         ValueError: If a leaf-name key matches multiple paths, or (when
             ``strict``) a key matches no path.
-        pydantic.ValidationError: If a value fails type validation at the
-            destination field.
+        FrozenConfigError: If ``model`` is frozen.
+        pydantic.ValidationError: If the merged config fails validation.
+    """
+    resolved = _resolve_override_paths(model, args, strict=strict)
+    if not resolved:
+        return
+    if getattr(model, "_frozen", False):
+        from onefig.model import FrozenConfigError
+
+        raise FrozenConfigError(
+            "Cannot apply overrides: config is frozen. "
+            "Create a new instance via .from_dict() or .model_copy()."
+        )
+    # Merge every override into a plain mapping, then re-validate the whole config
+    # once, so cross-field validators run against the final merged state and the
+    # result does not depend on override order.
+    data = model.model_dump()
+    for path, value in resolved:
+        _assign_in_mapping(data, path.split("."), value)
+    validated = type(model).model_validate(data)
+    for name in type(model).model_fields:
+        object.__setattr__(model, name, getattr(validated, name))
+    fields_set = set(validated.__pydantic_fields_set__)
+    object.__setattr__(model, "__pydantic_fields_set__", fields_set)
+
+
+def _resolve_override_paths(
+    model: BaseModel, args: dict[str, Any], *, strict: bool
+) -> list[tuple[str, Any]]:
+    """Resolve each override key to its single full dotted path.
+
+    Returns ``(path, value)`` pairs. Raises on an ambiguous leaf key, or (when
+    ``strict``) an unknown key; otherwise skips unknown keys.
     """
     candidates = _resolve_keys(model)
+    resolved: list[tuple[str, Any]] = []
     for key, value in args.items():
         paths = candidates.get(key)
         if paths is None:
@@ -44,7 +81,16 @@ def apply_overrides(
                 f"Ambiguous override key {key!r}: matches {conflicts}. "
                 "Use the full dotted path instead."
             )
-        _set_dotted(model, paths[0], value)
+        resolved.append((paths[0], value))
+    return resolved
+
+
+def _assign_in_mapping(data: dict[str, Any], path: list[str], value: Any) -> None:
+    """Set ``value`` at the nested ``path`` inside the mapping ``data``, in place."""
+    cursor = data
+    for key in path[:-1]:
+        cursor = cursor[key]
+    cursor[path[-1]] = value
 
 
 def _resolve_keys(model: BaseModel) -> dict[str, list[str]]:
