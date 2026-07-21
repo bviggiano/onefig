@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import pytest
-from pydantic import ValidationError
+from pydantic import ValidationError, model_validator
 
 from onefig import ConfigError, ConfigModel, tagged_union
 
@@ -90,6 +90,31 @@ def test_override_revalidates() -> None:
     cfg = _Cfg()
     with pytest.raises(ConfigError):
         cfg.update_from_args({"lr": "not_a_float"})
+
+
+def test_overrides_apply_then_validate_once() -> None:
+    """All overrides merge before one validation pass, so it's order-independent."""
+
+    class _Rng(ConfigModel):
+        lo: float = 0.1
+        hi: float = 0.9
+
+        @model_validator(mode="after")
+        def _ordered(self) -> _Rng:
+            if self.lo >= self.hi:
+                raise ValueError("lo must be < hi")
+            return self
+
+    # The final state (0.95 < 0.99) is valid; both orders succeed even though an
+    # intermediate (lo=0.95 while hi is still 0.9) would violate lo < hi per-field.
+    for overrides in ({"lo": 0.95, "hi": 0.99}, {"hi": 0.99, "lo": 0.95}):
+        cfg = _Rng()
+        cfg.update_from_args(overrides)
+        assert (cfg.lo, cfg.hi) == (0.95, 0.99)
+
+    # A genuinely invalid final config still raises.
+    with pytest.raises(ConfigError):
+        _Rng().update_from_args({"lo": 0.99, "hi": 0.1})
 
 
 def test_argparse_leaf_keys() -> None:
