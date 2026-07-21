@@ -139,24 +139,22 @@ def test_argparse_dotted_path_via_dest() -> None:
     assert cfg.model.lr == 0.99
 
 
-def test_attribute_write_uses_leaf_key_shortcut() -> None:
+def test_attribute_access_requires_full_path() -> None:
+    # In code, only full attribute paths resolve; leaf shortcuts are CLI/env-only.
     cfg = _Cfg()
-    cfg.lr = 0.5
+    cfg.model.lr = 0.5
     assert cfg.model.lr == 0.5
+    with pytest.raises(AttributeError, match="full path"):
+        cfg.lr = 0.5  # leaf write is rejected
+    with pytest.raises(AttributeError, match="full path"):
+        _ = cfg.lr  # leaf read is rejected
 
 
-def test_attribute_read_uses_leaf_key_shortcut() -> None:
-    cfg = _Cfg()
-    cfg.model.lr = 0.25
-    assert cfg.lr == 0.25
-
-
-def test_attribute_unknown_name_still_raises() -> None:
-
+def test_attribute_unknown_name_raises() -> None:
     cfg = _Cfg()
     with pytest.raises(AttributeError):
         _ = cfg.totally_unknown
-    with pytest.raises(ValidationError):
+    with pytest.raises(AttributeError):
         cfg.totally_unknown = 1
 
 
@@ -172,36 +170,49 @@ def test_attribute_ambiguous_leaf_raises() -> None:
         b: B = B()
 
     cfg = C()
-    with pytest.raises(AttributeError, match="Ambiguous"):
+    with pytest.raises(AttributeError, match="ambiguous"):
         cfg.lr = 0.5
-    with pytest.raises(AttributeError, match="Ambiguous"):
+    with pytest.raises(AttributeError, match="ambiguous"):
         _ = cfg.lr
 
 
-def test_attribute_shortcut_revalidates() -> None:
-
+def test_full_path_assignment_revalidates() -> None:
     cfg = _Cfg()
     with pytest.raises(ValidationError):
-        cfg.lr = "not_a_float"
+        cfg.model.lr = "not_a_float"
 
 
-def test_frozen_blocks_shortcut_writes_but_allows_reads() -> None:
+def test_frozen_blocks_writes() -> None:
     from onefig.model import FrozenConfigError
 
     cfg = _Cfg()
     cfg.model.lr = 0.42
     cfg.freeze()
 
-    # Reads still work — freezing doesn't change data.
-    assert cfg.lr == 0.42
-
-    # Writes (direct, dotted, and leaf-shortcut) all raise.
-    with pytest.raises(FrozenConfigError):
-        cfg.lr = 0.5
+    assert cfg.model.lr == 0.42  # reads are unaffected (full path)
     with pytest.raises(FrozenConfigError):
         cfg.epochs = 99
     with pytest.raises(FrozenConfigError):
-        cfg.model.lr = 0.5
+        cfg.model.lr = 0.5  # freeze() recurses into nested configs
+
+
+def test_cli_suffix_subpath_resolves() -> None:
+    class Inner(ConfigModel):
+        dropout: float = 0.0
+
+    class Mid(ConfigModel):
+        neck: Inner = Inner()
+
+    class Outer(ConfigModel):
+        objective: Mid = Mid()
+
+    cfg = Outer()
+    cfg.update_from_args({"neck.dropout": 0.3})  # a suffix subpath, not just the leaf
+    assert cfg.objective.neck.dropout == 0.3
+    cfg.update_from_args({"dropout": 0.5})  # the bare leaf still works
+    assert cfg.objective.neck.dropout == 0.5
+    cfg.update_from_args({"objective.neck.dropout": 0.7})  # and the full path
+    assert cfg.objective.neck.dropout == 0.7
 
 
 def test_top_level_full_path_beats_nested_leaf() -> None:

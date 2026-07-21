@@ -25,7 +25,7 @@ from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._overrides import _resolve_keys, _set_dotted, apply_overrides
+from onefig._overrides import _resolve_keys, apply_overrides
 
 
 def _dump_value(value: Any) -> Any:
@@ -42,6 +42,25 @@ def _dump_value(value: Any) -> Any:
 
 class FrozenConfigError(RuntimeError):
     """Raised when an attempt is made to mutate a frozen config."""
+
+
+def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
+    """Error text for a bare leaf/suffix attribute (shortcuts are CLI/env-only).
+
+    Points at the full dotted path for a unique leaf, lists the matches when ambiguous,
+    else a plain missing-attribute message.
+    """
+    who = type(model).__name__
+    paths = _resolve_keys(model).get(name)
+    if not paths or paths == [name]:
+        return f"{name!r} is not a field of {who}."
+    if len(paths) == 1:
+        return (
+            f"{name!r} is not a field of {who}; use the full path {paths[0]!r} "
+            "(leaf shortcuts resolve only in CLI/env overrides, not attribute access)."
+        )
+    matches = ", ".join(paths)
+    return f"{name!r} is ambiguous in {who} (matches {matches}); use the full path."
 
 
 class ConfigModel(BaseModel):
@@ -716,30 +735,17 @@ class ConfigModel(BaseModel):
             super().__setattr__(name, value)
             return
 
-        paths = _resolve_keys(self).get(name)
-        if paths is None:
+        if hasattr(cls, name):
+            # A class-level descriptor (e.g. a property setter): defer to normal Python.
             super().__setattr__(name, value)
             return
-        if len(paths) > 1:
-            raise AttributeError(
-                f"Ambiguous attribute {name!r}: matches {', '.join(paths)}. "
-                "Use the full dotted path."
-            )
-        _set_dotted(self, paths[0], value)
+
+        # Leaf/suffix shortcuts are CLI/env-only; in code, use the full attribute path.
+        raise AttributeError(_leaf_shortcut_hint(self, name))
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
             # Defer to Pydantic for private-attr / dunder lookup.
             return super().__getattr__(name)  # type: ignore[misc]
-        paths = _resolve_keys(self).get(name)
-        if paths is None:
-            raise AttributeError(name)
-        if len(paths) > 1:
-            raise AttributeError(
-                f"Ambiguous attribute {name!r}: matches {', '.join(paths)}. "
-                "Use the full dotted path."
-            )
-        obj: Any = self
-        for part in paths[0].split("."):
-            obj = getattr(obj, part)
-        return obj
+        # No leaf shortcuts on read either — read the full attribute path.
+        raise AttributeError(_leaf_shortcut_hint(self, name))

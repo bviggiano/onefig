@@ -15,8 +15,8 @@ def apply_overrides(
     """Update ``model`` in place with values from a flat override mapping.
 
     Keys may be full dotted paths (e.g. ``"optimizer.lr"``) or unambiguous
-    leaf names (e.g. ``"lr"``). Full-path matches take precedence over
-    leaf-name matches. Paths may descend through nested models and through
+    suffix subpaths, including the bare leaf (e.g. ``"lr"``). Shorter/base
+    paths take precedence. Paths may descend through nested models and through
     plain dataclass fields (e.g. a dataclass held by a discriminated union).
 
     All overrides are merged into the config and validated in a **single
@@ -96,9 +96,11 @@ def _assign_in_mapping(data: dict[str, Any], path: list[str], value: Any) -> Non
 def _resolve_keys(model: BaseModel) -> dict[str, list[str]]:
     """Map every accepted user-input key to its candidate full paths.
 
-    Each full dotted path maps to itself (one candidate). Each leaf name
-    maps to all paths ending in it, *unless* the leaf is itself a full
-    path — in which case the literal full-path resolution wins.
+    Each full dotted path maps to itself. Each *suffix subpath* of a full path
+    (its trailing segments, e.g. ``c`` and ``b.c`` for ``a.b.c``) also maps to
+    it, unless the suffix is itself a full path -- then that shorter/base path
+    takes precedence. A suffix shared by more than one full path is ambiguous
+    (``len > 1``) and fails at apply time.
 
     Args:
         model: Pydantic model whose fields define the path namespace.
@@ -112,10 +114,12 @@ def _resolve_keys(model: BaseModel) -> dict[str, list[str]]:
 
     out: dict[str, list[str]] = {p: [p] for p in full_paths}
     for path in full_paths:
-        leaf = path.rsplit(".", 1)[-1]
-        if leaf == path or leaf in full_set:
-            continue  # leaf is its own full path; full-path match takes precedence
-        out.setdefault(leaf, []).append(path)
+        segments = path.split(".")
+        for start in range(1, len(segments)):  # every proper trailing suffix
+            suffix = ".".join(segments[start:])
+            if suffix in full_set:
+                continue  # a shorter/base path owns this key; it wins
+            out.setdefault(suffix, []).append(path)
     return out
 
 
