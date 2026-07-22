@@ -225,8 +225,7 @@ complete -o nospace -F _onefig_python_complete {targets}
 def _python_zsh_script() -> str:
     targets = " ".join(_PYTHON_NAMES)
     cand_expr = (
-        '("${(@f)$($python_cmd "$script" '
-        '--onefig-completions "$PREFIX" 2>/dev/null)}")'
+        '("${(@f)$($python_cmd "$script" --onefig-completions "$PREFIX" 2>/dev/null)}")'
     )
     return f"""\
 {_PY_BANNER_OPEN}

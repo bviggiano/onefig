@@ -106,14 +106,14 @@ def test_config_roundtrip_through_flat_dict() -> None:
 
 
 def test_config_from_flat_dict_validates() -> None:
-    from pydantic import ValidationError
+    from onefig import ConfigError
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         _Outer.from_flat_dict({"epochs": "not_an_int"})
 
 
 def test_config_from_flat_dict_extra_forbidden() -> None:
-    from pydantic import ValidationError
+    from onefig import ConfigError
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         _Outer.from_flat_dict({"epochs": 1, "unknown.field": 2})

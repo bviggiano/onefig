@@ -153,10 +153,10 @@ eval "$(onefig install-python-completion bash)" # one-shot in current shell
 ```
 
 **How it works.** The completion list contains every overridable full
-dotted path (suffixed with `=`), every unambiguous leaf-name shortcut,
-and the special flags `--show`, `--help`, `-h`. Ambiguous leaves are
-deliberately omitted so users aren't offered a shortcut the override
-engine would refuse. The `python`-bound wrapper finds the first `.py`
+dotted path (suffixed with `=`), every unambiguous leaf-name and
+suffix-subpath shortcut, and the special flags `--show`, `--help`, `-h`.
+Ambiguous shortcuts are deliberately omitted so users aren't offered a
+form the override engine would refuse. The `python`-bound wrapper finds the first `.py`
 argument on the command line, and before invoking the script it greps
 the file for the literal word `onefig`. If the script doesn't reference
 onefig, the wrapper returns silently — your TAB key is never going to
@@ -269,12 +269,17 @@ cfg = TrainCfg.load("train")
 cfg.update_from_cli()                      # python script.py lr=0.001 epochs=20
 ```
 
-Leaf-key shortcuts are also supported: onefig resolves `lr` to `model.lr`
-when the leaf name is unambiguous in the schema:
+Leaf and suffix-subpath shortcuts are also supported on the command line:
+onefig resolves `lr` (or any trailing subpath like `model.lr`) to the full
+path when it is unambiguous in the schema — a base-level field wins over a
+nested one, and an ambiguous key fails loudly:
 
 ```bash
 python script.py lr=0.001                  # → cfg.model.lr = 0.001
 ```
+
+> **Shortcuts are for CLI and env overrides only.** In Python code, always use
+> the full attribute path — `cfg.model.lr`, not `cfg.lr` (which raises).
 
 For argparse-driven setups (custom flag types, integration with sweep
 tooling, etc.), `update_from_args` accepts a parsed `Namespace` and uses
@@ -299,8 +304,8 @@ cfg.update_from_args(args)                 # None values are skipped by default
 > *"I will take the Ring, though I do not know the way."*
 
 `update_from_env` reads overrides straight from the process environment,
-using the same override engine as the CLI path (leaf-key shortcuts,
-ambiguity detection, Pydantic re-validation):
+using the same override engine as the CLI path (leaf and suffix-subpath
+shortcuts, ambiguity detection, Pydantic re-validation):
 
 ```python
 cfg = TrainCfg.load("train")
@@ -583,6 +588,20 @@ print(cfg.epochs)          # reads always work
   available everywhere (run dirs, log lines, default tree titles).
 - **Auto commit hash** — `cfg.commit_hash` captures the running code's
   `git HEAD` on construction (best-effort; `None` when unavailable).
+
+## Integrations
+
+Typed configs for the file **formats** of external tools live under
+[`onefig.integrations`](src/onefig/integrations/README.md). Each models a tool's
+*format* only, so importing one never requires the tool to be installed.
+
+<a href="src/onefig/integrations/README.md"><img src="assets/wandb-logo.svg" alt="Weights & Biases" height="22"></a>
+
+**Weights & Biases** — `WandbSweepConfig` validates a wandb sweep config the moment
+you load it: malformed distributions, a continuous range under grid search, a metric
+that isn't logged, or a swept value outside your own config's bounds are all caught
+before the sweep launches. See the
+[integrations README](src/onefig/integrations/README.md) for details.
 
 ## API reference
 

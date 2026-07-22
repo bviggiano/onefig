@@ -29,9 +29,7 @@ class _MissingType:
 MISSING: Any = _MissingType()
 
 
-def compute_diff(
-    a: dict[str, Any], b: dict[str, Any]
-) -> dict[str, tuple[Any, Any]]:
+def compute_diff(a: dict[str, Any], b: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
     """Diff two flat dotted-key dicts.
 
     Returns ``{path: (old, new)}`` for every key whose value differs.
@@ -89,9 +87,7 @@ def format_diff(
     old_width = max(len(s) for s in raw_olds)
 
     lines: list[str] = []
-    for (key, (old, new)), old_str, new_str in zip(
-        diff.items(), raw_olds, raw_news
-    ):
+    for (key, (old, new)), old_str, new_str in zip(diff.items(), raw_olds, raw_news):
         old_padded = old_str.ljust(old_width)
         old_styled = _style_value(old_padded, old, _RED, enabled=use_color)
         new_styled = _style_value(new_str, new, _GREEN, enabled=use_color)
@@ -135,9 +131,7 @@ def format_against_defaults(
     key_width = max(len(k) for k in keys)
 
     overridden_olds = [
-        repr(defaults[k])
-        for k in keys
-        if k in defaults and defaults[k] != current[k]
+        repr(defaults[k]) for k in keys if k in defaults and defaults[k] != current[k]
     ]
     old_width = max((len(s) for s in overridden_olds), default=0)
 
@@ -152,9 +146,7 @@ def format_against_defaults(
             lines.append(f"  {key_col}  {value_styled}")
         else:
             # Overridden — default in red, current in green.
-            default_repr = (
-                repr(defaults[key]) if key in defaults else "<MISSING>"
-            )
+            default_repr = repr(defaults[key]) if key in defaults else "<MISSING>"
             old_padded = default_repr.ljust(old_width)
             old_styled = _style(old_padded, _RED, enabled=use_color)
             new_styled = _style(cur_repr, _GREEN, enabled=use_color)
@@ -168,9 +160,7 @@ def _format_value(value: Any) -> str:
     return repr(value)
 
 
-def _style_value(
-    text: str, value: Any, color_code: str, *, enabled: bool
-) -> str:
+def _style_value(text: str, value: Any, color_code: str, *, enabled: bool) -> str:
     """Style a value's rendered text. MISSING dims; everything else uses
     its side's color."""
     if not enabled:

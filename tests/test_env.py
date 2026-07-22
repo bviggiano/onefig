@@ -106,9 +106,7 @@ def test_update_from_env_basic() -> None:
 
 def test_update_from_env_nested() -> None:
     cfg = Cfg()
-    cfg.update_from_env(
-        "MYAPP_", environ={"MYAPP_MODEL__LR": "0.001"}
-    )
+    cfg.update_from_env("MYAPP_", environ={"MYAPP_MODEL__LR": "0.001"})
     assert cfg.model.lr == 0.001
 
 
@@ -122,9 +120,7 @@ def test_update_from_env_leaf_shortcut() -> None:
 def test_update_from_env_strict_rejects_unknown() -> None:
     cfg = Cfg()
     with pytest.raises(ValueError, match="not found"):
-        cfg.update_from_env(
-            "MYAPP_", environ={"MYAPP_NOPE": "1"}
-        )
+        cfg.update_from_env("MYAPP_", environ={"MYAPP_NOPE": "1"})
 
 
 def test_update_from_env_non_strict_skips_unknown() -> None:
@@ -138,13 +134,11 @@ def test_update_from_env_non_strict_skips_unknown() -> None:
 
 
 def test_update_from_env_type_validation() -> None:
-    from pydantic import ValidationError
+    from onefig import ConfigError
 
     cfg = Cfg()
-    with pytest.raises(ValidationError):
-        cfg.update_from_env(
-            "MYAPP_", environ={"MYAPP_EPOCHS": "not_an_int"}
-        )
+    with pytest.raises(ConfigError):
+        cfg.update_from_env("MYAPP_", environ={"MYAPP_EPOCHS": "not_an_int"})
 
 
 def test_update_from_env_bool_coercion() -> None:

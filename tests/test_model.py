@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from onefig import ConfigModel
+from onefig import ConfigError, ConfigModel
 from onefig.model import FrozenConfigError
 
 
@@ -31,14 +31,14 @@ def test_load_validates(tmp_path: Path) -> None:
 def test_load_type_error(tmp_path: Path) -> None:
     p = tmp_path / "c.yaml"
     p.write_text("epochs: not_an_int\n")
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         Cfg.load(p)
 
 
 def test_extra_forbid(tmp_path: Path) -> None:
     p = tmp_path / "c.yaml"
     p.write_text("epochs: 5\nunknown_field: 1\n")
-    with pytest.raises(ValidationError):
+    with pytest.raises(ConfigError):
         Cfg.load(p)
 
 
@@ -95,6 +95,37 @@ def test_display_prints(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "MyCfg:" in captured.out
     assert "epochs" in captured.out
+
+
+def test_display_sections_default_empty(capsys: pytest.CaptureFixture[str]) -> None:
+    cfg = Cfg(epochs=2, model=Sub(lr=0.1, name="z"))
+    assert cfg.display_sections() == []
+    cfg.display(name="MyCfg")
+    assert "MyCfg:" in capsys.readouterr().out  # tree only, no extra blocks
+
+
+def test_display_renders_many_sections_below_the_tree(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class WithSections(Cfg):
+        def display_sections(self) -> list[str]:
+            return ["Section A:\n  aaa", "Section B:\n  bbb"]
+
+    WithSections(epochs=2, model=Sub(lr=0.1, name="z")).display(name="MyCfg")
+    out = capsys.readouterr().out
+    assert "MyCfg:" in out  # the config tree
+    assert "Section A:\n  aaa" in out and "Section B:\n  bbb" in out  # multiple blocks
+    assert out.index("epochs") < out.index("Section A") < out.index("Section B")
+
+
+def test_display_appends_call_time_sections(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = Cfg(epochs=2, model=Sub(lr=0.1, name="z"))
+    cfg.display(name="MyCfg", sections=["Ad hoc:\n  custom input"])
+    out = capsys.readouterr().out
+    assert "Ad hoc:\n  custom input" in out
+    assert out.index("epochs") < out.index("Ad hoc")
 
 
 def test_config_name_defaults_to_none() -> None:
@@ -260,3 +291,20 @@ def test_model_post_init_fires_through_load(tmp_path: Path) -> None:
     # Also fires via from_dict and direct construction
     assert Derived.from_dict({"x": 1, "y": 2}).total == 3
     assert Derived(x=10, y=20).total == 30
+
+
+def test_codename_is_deterministic_and_content_addressable() -> None:
+    class Cfg(ConfigModel):
+        lr: float = 0.1
+        device: str = "cpu"
+        name: str = (
+            "keeps working alongside codename()"  # a `name` field must not collide
+        )
+
+    assert Cfg().codename() == Cfg().codename()  # same config -> same name
+    assert Cfg(lr=0.5).codename() != Cfg().codename()  # identity change -> different
+    # excluded top-level fields don't affect the name
+    excl = ("device",)
+    assert Cfg(device="cuda").codename(exclude=excl) == Cfg().codename(exclude=excl)
+    assert Cfg().codename(suffix=True).count("_") >= 1  # kwargs forwarded to namekit
+    assert Cfg().name == "keeps working alongside codename()"  # field access intact

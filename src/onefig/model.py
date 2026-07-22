@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 from argparse import Namespace
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -19,15 +20,47 @@ from onefig._completion import (
 )
 from onefig._diff import compute_diff, format_against_defaults, format_diff
 from onefig._env import parse_env
+from onefig._errors import clean_validation_errors
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._overrides import _resolve_keys, _set_dotted, apply_overrides
+from onefig._overrides import _resolve_keys, apply_overrides
+
+
+def _dump_value(value: Any) -> Any:
+    """Reduce a default value to plain data for flattening.
+
+    Models and dataclasses become nested dicts; scalars pass through.
+    """
+    if isinstance(value, BaseModel):
+        return value.model_dump()
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    return value
 
 
 class FrozenConfigError(RuntimeError):
     """Raised when an attempt is made to mutate a frozen config."""
+
+
+def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
+    """Error text for a bare leaf/suffix attribute (shortcuts are CLI/env-only).
+
+    Points at the full dotted path for a unique leaf, lists the matches when ambiguous,
+    else a plain missing-attribute message.
+    """
+    who = type(model).__name__
+    paths = _resolve_keys(model).get(name)
+    if not paths or paths == [name]:
+        return f"{name!r} is not a field of {who}."
+    if len(paths) == 1:
+        return (
+            f"{name!r} is not a field of {who}; use the full path {paths[0]!r} "
+            "(leaf shortcuts resolve only in CLI/env overrides, not attribute access)."
+        )
+    matches = ", ".join(paths)
+    return f"{name!r} is ambiguous in {who} (matches {matches}); use the full path."
 
 
 class ConfigModel(BaseModel):
@@ -115,12 +148,12 @@ class ConfigModel(BaseModel):
         Raises:
             FileNotFoundError: If a bare name resolves to no file.
             ValueError: If a bare name resolves to multiple files.
-            pydantic.ValidationError: If the YAML contents do not match
-                the schema.
+            ConfigError: If the YAML contents do not match the schema.
         """
         path = resolve_path(name_or_path, search_root=search_root)
         data = load_yaml(path)
-        instance = cls.model_validate(data)
+        with clean_validation_errors(cls, name=config_name or path.stem):
+            instance = cls.model_validate(data)
         object.__setattr__(instance, "_config_name", config_name or path.stem)
         return instance
 
@@ -134,7 +167,8 @@ class ConfigModel(BaseModel):
         Returns:
             A validated instance of ``cls``.
         """
-        return cls.model_validate(data)
+        with clean_validation_errors(cls):
+            return cls.model_validate(data)
 
     @classmethod
     def from_flat_dict(cls, flat: dict[str, Any]) -> Self:
@@ -150,7 +184,8 @@ class ConfigModel(BaseModel):
         Returns:
             A validated instance of ``cls``.
         """
-        return cls.model_validate(unflatten(flat))
+        with clean_validation_errors(cls):
+            return cls.model_validate(unflatten(flat))
 
     def update_from_args(
         self,
@@ -185,8 +220,8 @@ class ConfigModel(BaseModel):
         Raises:
             ValueError: If a leaf key is ambiguous, or (when ``strict``) if
                 a key is unknown.
-            pydantic.ValidationError: If a value fails type validation at
-                the destination field.
+            ConfigError: If a value fails type validation at the
+                destination field.
         """
         if isinstance(args, Namespace):
             raw = vars(args)
@@ -194,7 +229,8 @@ class ConfigModel(BaseModel):
             raw = dict(args)
         if skip_none:
             raw = {k: v for k, v in raw.items() if v is not None}
-        apply_overrides(self, raw, strict=strict)
+        with clean_validation_errors(type(self), name=self._config_name):
+            apply_overrides(self, raw, strict=strict)
 
     def update_from_env(
         self,
@@ -238,8 +274,8 @@ class ConfigModel(BaseModel):
         Raises:
             ValueError: For malformed env var names (empty key segments),
                 ambiguous leaf keys, or (when ``strict``) unknown keys.
-            pydantic.ValidationError: If a value fails type validation at
-                the destination field.
+            ConfigError: If a value fails type validation at the
+                destination field.
         """
         env = os.environ if environ is None else environ
         overrides = parse_env(
@@ -248,7 +284,8 @@ class ConfigModel(BaseModel):
             delimiter=delimiter,
             case_sensitive=case_sensitive,
         )
-        apply_overrides(self, overrides, strict=strict)
+        with clean_validation_errors(type(self), name=self._config_name):
+            apply_overrides(self, overrides, strict=strict)
 
     def update_from_cli(
         self,
@@ -307,8 +344,8 @@ class ConfigModel(BaseModel):
         Raises:
             ValueError: For malformed tokens, ambiguous leaf keys, or (when
                 ``strict``) unknown keys.
-            pydantic.ValidationError: If a value fails type validation at
-                the destination field.
+            ConfigError: If a value fails type validation at the
+                destination field.
             SystemExit: If ``--show``, ``--help`` / ``-h``, or one of the
                 completion flags was passed and the corresponding
                 ``exit_on_*`` flag is ``True``.
@@ -353,7 +390,8 @@ class ConfigModel(BaseModel):
         tokens = [t for t in tokens if t != "--show"]
 
         overrides = parse_overrides(tokens)
-        apply_overrides(self, overrides, strict=strict)
+        with clean_validation_errors(type(self), name=self._config_name):
+            apply_overrides(self, overrides, strict=strict)
 
         if show_requested:
             self.display()
@@ -465,9 +503,32 @@ class ConfigModel(BaseModel):
         """
         return flatten(self.model_dump())
 
-    def diff(
-        self, other: ConfigModel | dict[str, Any]
-    ) -> dict[str, tuple[Any, Any]]:
+    def codename(self, *, exclude: Iterable[str] = (), **kwargs: Any) -> str:
+        """Deterministic, memorable code name for this config.
+
+        The same realized config always produces the same code name
+        (content-addressable): the config is dumped, top-level ``exclude`` keys
+        are dropped, and :func:`namekit.name_from_mapping` maps a stable digest
+        of the remainder to a memorable name. Handy for naming training runs,
+        experiments, or sweeps straight from a config. (Named ``codename`` rather
+        than ``name`` to avoid colliding with a config's own ``name`` field.)
+
+        Args:
+            exclude: Top-level field names to omit from the name — e.g. runtime
+                or output fields (``device``, ``output_dir``) that don't define
+                the experiment, so the same experiment names the same regardless
+                of them.
+            **kwargs: Forwarded to :func:`namekit.name` (``suffix``, ``case``,
+                ``franchise``, ...).
+
+        Returns:
+            A memorable name string.
+        """
+        import namekit
+
+        return namekit.name_from_mapping(self.model_dump(), exclude=exclude, **kwargs)
+
+    def diff(self, other: ConfigModel | dict[str, Any]) -> dict[str, tuple[Any, Any]]:
         """Diff this config's leaves against another config or dict.
 
         Returns ``{dotted_path: (self_value, other_value)}`` for every leaf
@@ -504,30 +565,34 @@ class ConfigModel(BaseModel):
             )
         return compute_diff(self.to_flat_dict(), other_flat)
 
+    def _defaults_flat_dict(self) -> dict[str, Any]:
+        """Flat dotted-key dict of the schema's default leaf values.
+
+        Built field by field from :attr:`model_fields` rather than by
+        constructing a default instance, so classes with required fields are
+        supported. A required field (no default) contributes no key, so it
+        surfaces as "specified" against the current config.
+        """
+        defaults: dict[str, Any] = {}
+        for name, field in type(self).model_fields.items():
+            if field.is_required():
+                continue
+            defaults[name] = _dump_value(field.get_default(call_default_factory=True))
+        return flatten(defaults)
+
     def diff_from_defaults(self) -> dict[str, tuple[Any, Any]]:
-        """Diff this config against a default-constructed instance of its type.
+        """Diff this config against its schema defaults.
 
         Useful for surfacing which fields a run actually overrode versus
-        what the schema would have produced on its own.
+        what the schema would have produced on its own. Required fields (which
+        have no default) are reported as specified, with
+        :data:`onefig.MISSING` on the default side.
 
         Returns:
             Ordered mapping of changed leaf paths to ``(default, current)``
             tuples. Empty when the config matches its schema defaults.
-
-        Raises:
-            ValueError: If the config class has required fields with no
-                defaults (so a default instance can't be built). Use
-                :meth:`diff` against an explicit baseline instead.
         """
-        try:
-            default = type(self)()
-        except Exception as exc:
-            raise ValueError(
-                f"{type(self).__name__} has required fields with no defaults, "
-                "so diff_from_defaults() can't build a baseline. Use "
-                "cfg.diff(other_cfg) against an explicit baseline instead."
-            ) from exc
-        return default.diff(self)
+        return compute_diff(self._defaults_flat_dict(), self.to_flat_dict())
 
     def format_diff(
         self,
@@ -573,22 +638,10 @@ class ConfigModel(BaseModel):
         Args:
             color: ``True`` / ``False`` to force ANSI on or off. ``None``
                 (default) auto-detects via ``sys.stdout.isatty()``.
-
-        Raises:
-            ValueError: If the config class has required fields with no
-                defaults (so a default instance can't be built).
         """
-        try:
-            default = type(self)()
-        except Exception as exc:
-            raise ValueError(
-                f"{type(self).__name__} has required fields with no defaults, "
-                "so format_diff_from_defaults() can't build a baseline. Use "
-                "cfg.format_diff(other_cfg) against an explicit baseline."
-            ) from exc
         return format_against_defaults(
             self.to_flat_dict(),
-            default.to_flat_dict(),
+            self._defaults_flat_dict(),
             color=color,
         )
 
@@ -634,15 +687,37 @@ class ConfigModel(BaseModel):
         """
         return self._frozen
 
-    def display(self, name: str | None = None) -> None:
-        """Print this config as an ASCII tree to stdout.
+    def display_sections(self) -> list[str]:
+        """Extra blocks to print after the config tree in :meth:`display` / ``--show``.
+
+        Override in a subclass to surface derived, human-readable views that are *not*
+        config fields — for example an effective scheme computed from several fields.
+        Return as many blocks as you like; each is printed as its own block below the
+        tree, and the subclass owns its formatting. The base config adds none.
+
+        Returns:
+            Rendered sections, in the order they should appear (empty by default).
+        """
+        return []
+
+    def display(self, name: str | None = None, *, sections: Iterable[str] = ()) -> None:
+        """Print this config as an ASCII tree to stdout, then any custom sections.
+
+        The tree is the config's fields. Below it, derived views are printed as separate
+        blocks so they never look like fields: first this config's own
+        :meth:`display_sections` (empty by default), then any ``sections`` passed in at
+        call time. Both accept as many blocks as you like, each formatted by the caller.
 
         Args:
             name: Title for the root of the tree. Defaults to
                 :attr:`config_name` if set, else ``"Config"``.
+            sections: Additional pre-rendered blocks to append, for callers that build
+                display content dynamically rather than via :meth:`display_sections`.
         """
         title = name or self._config_name or "Config"
         print(format_tree(self.model_dump(), name=title))
+        for section in (*self.display_sections(), *sections):
+            print(f"\n{section}")
 
     def __setattr__(self, name: str, value: Any) -> None:
         if getattr(self, "_frozen", False):
@@ -660,30 +735,17 @@ class ConfigModel(BaseModel):
             super().__setattr__(name, value)
             return
 
-        paths = _resolve_keys(self).get(name)
-        if paths is None:
+        if hasattr(cls, name):
+            # A class-level descriptor (e.g. a property setter): defer to normal Python.
             super().__setattr__(name, value)
             return
-        if len(paths) > 1:
-            raise AttributeError(
-                f"Ambiguous attribute {name!r}: matches {', '.join(paths)}. "
-                "Use the full dotted path."
-            )
-        _set_dotted(self, paths[0], value)
+
+        # Leaf/suffix shortcuts are CLI/env-only; in code, use the full attribute path.
+        raise AttributeError(_leaf_shortcut_hint(self, name))
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
             # Defer to Pydantic for private-attr / dunder lookup.
             return super().__getattr__(name)  # type: ignore[misc]
-        paths = _resolve_keys(self).get(name)
-        if paths is None:
-            raise AttributeError(name)
-        if len(paths) > 1:
-            raise AttributeError(
-                f"Ambiguous attribute {name!r}: matches {', '.join(paths)}. "
-                "Use the full dotted path."
-            )
-        obj: Any = self
-        for part in paths[0].split("."):
-            obj = getattr(obj, part)
-        return obj
+        # No leaf shortcuts on read either — read the full attribute path.
+        raise AttributeError(_leaf_shortcut_hint(self, name))

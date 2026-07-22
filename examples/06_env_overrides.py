@@ -52,8 +52,8 @@ class TrainCfg(ConfigModel):
 
 def main() -> None:
     cfg = TrainCfg.load("examples/configs/train.yaml")
-    cfg.update_from_env("MYAPP_")     # env wins over YAML
-    cfg.update_from_cli()             # CLI wins over env
+    cfg.update_from_env("MYAPP_")  # env wins over YAML
+    cfg.update_from_cli()  # CLI wins over env
     cfg.display()
 
 
