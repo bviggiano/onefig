@@ -98,7 +98,7 @@ def _compose(path: Path, *, _seen: set[Path]) -> DictConfig:
     parent_paths = _resolve_extends(parents_raw, base_dir=path.parent, source=path)
 
     next_seen = _seen | {resolved}
-    merged = OmegaConf.create({})
+    merged: Any = OmegaConf.create({})  # merge() widens to ListConfig | DictConfig
     for parent_path in parent_paths:
         parent = _compose(parent_path, _seen=next_seen)
         merged = OmegaConf.merge(merged, parent)
