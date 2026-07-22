@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "onefig"
-version = "0.1.1"
+version = "0.1.2"
 description = "A simple, typed YAML config system built on OmegaConf and Pydantic."
 readme = "README.md"
 requires-python = ">=3.9"
