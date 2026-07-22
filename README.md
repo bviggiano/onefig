@@ -574,8 +574,10 @@ print(cfg.epochs)          # reads always work
 - **Shell tab completion** — `onefig install-python-completion <shell>`
   enables TAB completion of every overridable key for any onefig script
   invoked via `python`. Supports `bash`, `zsh`, and `fish`.
-- **Leaf-key shortcuts** — `lr` resolves to `model.optimizer.lr` when the
-  leaf name is unambiguous; conflicts raise with a clear message.
+- **CLI / env override shortcuts** — on the command line and in env vars,
+  `lr` (or any trailing subpath like `model.lr`) resolves to its full path
+  when unambiguous; ambiguous keys raise with a clear message. In Python
+  code, always use the full attribute path.
 - **Round-trip serialization** — `cfg.save_yaml()` ↔ `Cfg.load()`, and
   `cfg.to_flat_dict()` ↔ `Cfg.from_flat_dict()`.
 - **Config diff** — `cfg.diff(other)` and `cfg.diff_from_defaults()`
