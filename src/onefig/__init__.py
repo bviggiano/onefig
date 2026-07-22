@@ -16,4 +16,4 @@ __all__ = [
     "tagged_union",
     "unflatten",
 ]
-__version__ = "0.1.1"
+__version__ = "0.1.2"
