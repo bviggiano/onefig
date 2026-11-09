@@ -15,7 +15,7 @@ More may be added over time (other experiment trackers, schedulers, etc.).
 
 ---
 
-## <img src="../../../assets/wandb-logo.svg" alt="W&B" height="18"> Weights & Biases
+## <img src="https://raw.githubusercontent.com/bviggiano/onefig/main/assets/wandb-logo.svg" alt="W&B" height="18"> Weights & Biases
 
 `WandbSweepConfig` models the [wandb sweep configuration
 format](https://docs.wandb.ai/guides/sweeps/define-sweep-configuration). wandb's sweep schema is precise and

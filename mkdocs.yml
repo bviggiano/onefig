@@ -1,0 +1,47 @@
+site_name: onefig
+site_description: A simple, typed YAML config system built on OmegaConf and Pydantic.
+site_url: https://bviggiano.github.io/onefig/
+repo_url: https://github.com/bviggiano/onefig
+repo_name: bviggiano/onefig
+edit_uri: edit/main/docs/
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Command-line overrides: cli.md
+      - Environment variables: env.md
+      - Shell tab completion: completion.md
+      - YAML composition: yaml.md
+      - Validation and freezing: validation.md
+      - Experiment tracking: experiments.md
+      - Diffing configs: diff.md
+  - Integrations: integrations.md
+  - API reference: api.md
+  - Examples: https://github.com/bviggiano/onefig/tree/main/examples
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences

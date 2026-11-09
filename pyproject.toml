@@ -41,9 +41,11 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.8",
 ]
+docs = ["mkdocs-material>=9.5"]
 
 [project.urls]
 Homepage = "https://github.com/bviggiano/onefig"
+Documentation = "https://bviggiano.github.io/onefig/"
 Repository = "https://github.com/bviggiano/onefig"
 Issues = "https://github.com/bviggiano/onefig/issues"
 
