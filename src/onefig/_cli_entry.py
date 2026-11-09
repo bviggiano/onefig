@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from onefig._completion import python_completion_script, shell_script
+from onefig._completion import SHELLS, python_completion_script, shell_script
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_install.add_argument(
         "shell",
-        choices=("bash", "zsh", "fish"),
+        choices=SHELLS,
         help="Target shell.",
     )
     p_install.add_argument(
@@ -49,14 +49,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         description=(
             "Print a generic shell snippet that hooks tab completion onto "
-            "`python` and `python3`. After installing it once, every "
+            "`python`, `python3` and `python3.X`. After installing it once, every "
             "onefig-based script invoked via `python script.py` gets "
             "completion automatically."
         ),
     )
     p_py.add_argument(
         "shell",
-        choices=("bash", "zsh", "fish"),
+        choices=SHELLS,
         help="Target shell.",
     )
 

@@ -425,9 +425,9 @@ class ConfigModel(BaseModel):
         """Return tab-completion candidates for this config's CLI overrides.
 
         Each scalar field contributes its full dotted path suffixed with
-        ``=`` (e.g. ``"optimizer.lr="``); unambiguous leaf names are
-        offered as shorthands; ambiguous leaves are omitted. Special flags
-        (``--show``, ``--help``, ``-h``) are appended.
+        ``=`` (e.g. ``"optimizer.lr="``); unambiguous suffix subpaths,
+        including the bare leaf, are offered as shorthands; ambiguous ones are
+        omitted. Special flags (``--show``, ``--help``, ``-h``) are appended.
 
         Used by the shell completion scripts emitted by
         :meth:`shell_completion_script`.

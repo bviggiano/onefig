@@ -5,18 +5,13 @@ import inspect
 import os
 import re
 import sys
-import typing
-from collections import OrderedDict
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import BaseModel, ValidationError
 
-_BOLD = "\033[1m"
-_DIM = "\033[2m"
-_RED = "\033[31m"
-_RESET = "\033[0m"
+from onefig._ansi import BOLD, DIM, RED, style
 
 # Prefixes Pydantic prepends when a plain ``ValueError`` / ``AssertionError`` is
 # raised inside a validator; they add no information once the field is named.
@@ -105,10 +100,6 @@ def _strip_urls(exc: ValidationError) -> str:
 # ---- rendering -------------------------------------------------------------
 
 
-def _style(text: str, code: str, *, enabled: bool) -> str:
-    return f"{code}{text}{_RESET}" if enabled else text
-
-
 def _format_tree(
     exc: ValidationError,
     *,
@@ -126,30 +117,28 @@ def _format_tree(
     if label:
         title = f"{title} in {label!r}"
     header = (
-        f"{_style('✗', _RED, enabled=use_color)} "
-        f"{_style(title, _BOLD, enabled=use_color)} — {problems}"
+        f"{style('✗', RED, enabled=use_color)} "
+        f"{style(title, BOLD, enabled=use_color)} — {problems}"
     )
     tree = _build_tree(errors, root)
     return "\n".join([header, *_render_nodes(tree, "", enabled=use_color)])
 
 
-def _build_tree(errors: list[Any], root: type | None) -> OrderedDict[str, Any]:
-    tree: OrderedDict[str, Any] = OrderedDict()
+def _build_tree(errors: list[Any], root: type | None) -> dict[str, Any]:
+    tree: dict[str, Any] = {}
     for err in errors:
         segments, message, location = _analyze(err, root)
         node = tree
         leaf: dict[str, Any] | None = None
         for key in segments:
-            leaf = node.setdefault(key, {"children": OrderedDict(), "error": None})
+            leaf = node.setdefault(key, {"children": {}, "error": None})
             node = leaf["children"]
         if leaf is not None:
             leaf["error"] = (message, location)
     return tree
 
 
-def _render_nodes(
-    node: OrderedDict[str, Any], prefix: str, *, enabled: bool
-) -> list[str]:
+def _render_nodes(node: dict[str, Any], prefix: str, *, enabled: bool) -> list[str]:
     lines: list[str] = []
     items = list(node.items())
     last = len(items) - 1
@@ -159,11 +148,11 @@ def _render_nodes(
         error = data["error"]
         if error is not None:
             message, location = error
-            mark = _style("✗", _RED, enabled=enabled)
-            key_styled = _style(key, _BOLD, enabled=enabled)
+            mark = style("✗", RED, enabled=enabled)
+            key_styled = style(key, BOLD, enabled=enabled)
             lines.append(f"{prefix}{connector}{key_styled}  {mark} {message}")
             if location is not None:
-                pointer = _style(f"→ {location}", _DIM, enabled=enabled)
+                pointer = style(f"→ {location}", DIM, enabled=enabled)
                 lines.append(f"{child_prefix}{pointer}")
         else:
             lines.append(f"{prefix}{connector}{key}")
@@ -223,7 +212,7 @@ def _child_fields(cls: Any) -> dict[str, tuple[Any, Any]] | None:
 
 def _iter_variants(annotation: Any) -> Iterator[type]:
     """Yield the concrete classes of a (possibly Annotated) union annotation."""
-    for arg in typing.get_args(annotation):
+    for arg in get_args(annotation):
         if isinstance(arg, type):
             yield arg
         else:
@@ -264,7 +253,7 @@ def _analyze(err: Any, root: type | None) -> tuple[list[str], str, str | None]:
     location = _source(owner, field_name)
 
     container = owner if field_name is None else _field_type(owner, field_name)
-    fields = _child_fields(container) if container is not None else None
+    fields = _child_fields(container)
     if container is not None and fields and message:
         leaf = message.split(None, 1)[0]
         if leaf in fields:

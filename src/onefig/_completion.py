@@ -7,15 +7,16 @@ from pydantic import BaseModel
 from onefig._overrides import resolve_keys
 
 _SPECIAL_FLAGS = ("--show", "--help", "-h")
+SHELLS = ("bash", "zsh", "fish")
 
 
 def completion_candidates(model: BaseModel) -> list[str]:
     """Return every override-key candidate the shell should offer.
 
     Each scalar field contributes its full dotted path suffixed with ``=``
-    (e.g. ``"optimizer.lr="``). When the leaf name resolves uniquely it is
-    also offered as a shorthand (``"lr="``); ambiguous leaves are omitted
-    so users aren't shown a shortcut the override engine would refuse.
+    (e.g. ``"optimizer.lr="``), plus every suffix subpath that resolves
+    uniquely, including the bare leaf (``"lr="``). Ambiguous shortcuts are
+    omitted so users aren't shown one the override engine would refuse.
 
     Special flags (``--show``, ``--help``, ``-h``) round out the list.
 
@@ -25,17 +26,8 @@ def completion_candidates(model: BaseModel) -> list[str]:
     Returns:
         A flat list of completion strings, in stable insertion order.
     """
-    candidates = resolve_keys(model)
-    seen: set[str] = set()
-    out: list[str] = []
-    for key, paths in candidates.items():
-        if len(paths) != 1:
-            # Ambiguous leaf — skip; the full-path form will appear separately.
-            continue
-        token = f"{key}="
-        if token not in seen:
-            seen.add(token)
-            out.append(token)
+    # Ambiguous keys are skipped; their full-path forms are always unique.
+    out = [f"{key}=" for key, paths in resolve_keys(model).items() if len(paths) == 1]
     out.extend(_SPECIAL_FLAGS)
     return out
 
@@ -65,7 +57,9 @@ def shell_script(shell: str, *, prog: str) -> str:
         return _zsh_script(prog)
     if shell == "fish":
         return _fish_script(prog)
-    raise ValueError(f"Unsupported shell {shell!r}; expected one of: bash, zsh, fish.")
+    raise ValueError(
+        f"Unsupported shell {shell!r}; expected one of: {', '.join(SHELLS)}."
+    )
 
 
 def _safe_func_suffix(prog: str) -> str:
@@ -82,7 +76,6 @@ def _safe_func_suffix(prog: str) -> str:
 _BANNER_OPEN = "# ========== onefig: tab completion =========="
 _BANNER_CLOSE = "# ============================================"
 _PY_BANNER_OPEN = "# ====== onefig: python tab completion ======="
-_PY_BANNER_CLOSE = "# ============================================"
 
 
 def _bash_script(prog: str) -> str:
@@ -170,7 +163,9 @@ def python_completion_script(shell: str) -> str:
         return _python_zsh_script()
     if shell == "fish":
         return _python_fish_script()
-    raise ValueError(f"Unsupported shell {shell!r}; expected one of: bash, zsh, fish.")
+    raise ValueError(
+        f"Unsupported shell {shell!r}; expected one of: {', '.join(SHELLS)}."
+    )
 
 
 _PYTHON_NAMES = (
@@ -218,7 +213,7 @@ _onefig_python_complete() {{
     COMPREPLY=( $(compgen -W "$candidates" -- "$cur") )
 }}
 complete -o nospace -F _onefig_python_complete {targets}
-{_PY_BANNER_CLOSE}
+{_BANNER_CLOSE}
 """
 
 
@@ -258,7 +253,7 @@ if (( ! ${{+functions[compdef]}} )); then
     autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
 fi
 (( ${{+functions[compdef]}} )) && compdef _onefig_python_complete {targets}
-{_PY_BANNER_CLOSE}
+{_BANNER_CLOSE}
 """
 
 
@@ -290,5 +285,5 @@ function __onefig_python_complete
     $tokens[1] "$script" --onefig-completions "$cur" 2>/dev/null
 end
 complete {cmds} -f -a '(__onefig_python_complete)'
-{_PY_BANNER_CLOSE}
+{_BANNER_CLOSE}
 """
