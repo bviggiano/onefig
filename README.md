@@ -128,8 +128,8 @@ YAML files support `${...}` interpolation and `extends:` composition; see
   sentinel for cross-schema gaps. Handy for run logs and PR-style
   "what changed" output.
 - [**Recursive freeze**](https://bviggiano.github.io/onefig/validation/#frozen-configs) — `cfg.freeze()` makes the whole tree immutable.
-- **Tree display** — `cfg.display()` prints the config as an ASCII tree.
-- **Auto config name** — `cfg.config_name` is set from the YAML filename and
+- [**Tree display**](https://bviggiano.github.io/onefig/experiments/#print-the-config-as-a-tree) — `cfg.display()` prints the config as an ASCII tree.
+- [**Auto config name**](https://bviggiano.github.io/onefig/experiments/#name-runs-with-config_name) — `cfg.config_name` is set from the YAML filename and
   available everywhere (run dirs, log lines, default tree titles).
 - [**Auto commit hash**](https://bviggiano.github.io/onefig/experiments/#capture-the-running-codes-commit-hash) — `cfg.commit_hash` captures the running code's
   `git HEAD` on construction (best-effort; `None` when unavailable).
@@ -141,8 +141,6 @@ Full documentation: **[bviggiano.github.io/onefig](https://bviggiano.github.io/o
 ## License
 
 MIT
-
----
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=Y5NTgZA-xWE">

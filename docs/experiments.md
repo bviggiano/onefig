@@ -14,6 +14,37 @@ cfg.save_yaml(run_dir / "config.yaml")     # round-trippable via TrainCfg.load(.
 
 > Runnable demo: [`examples/07_freeze_and_snapshot.py`](https://github.com/bviggiano/onefig/blob/main/examples/07_freeze_and_snapshot.py).
 
+## Name runs with `config_name`
+
+`load` sets `cfg.config_name` to the YAML file's stem, so a config loaded from
+`train.yaml` is named `"train"`. Use it for run directories, log lines, and
+tracker run names. Pass `config_name=` to `load` to choose a different name, or
+assign `cfg.config_name` while the config is unfrozen. Configs built directly
+or with `from_dict` start with `None`.
+
+```python
+cfg = TrainCfg.load("configs/train.yaml")
+cfg.config_name                # "train"
+```
+
+## Print the config as a tree
+
+`cfg.display()` prints the resolved config as an ASCII tree, titled with
+`config_name` (or `"Config"` when unset). `--show` on the command line prints
+the same tree and exits.
+
+```text
+train:
+├── epochs: 5
+└── model:
+    ├── name: 'tiny-bert'
+    └── lr: 0.001
+```
+
+Pass `name=` to override the title. To print derived values that aren't config
+fields below the tree, override `display_sections()` in your `ConfigModel`
+subclass and return the extra blocks, or pass `sections=` at call time.
+
 ## Capture the running code's commit hash
 
 Every config automatically captures the current `git HEAD` hash on
