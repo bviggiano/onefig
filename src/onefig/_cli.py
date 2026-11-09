@@ -12,8 +12,8 @@ def parse_overrides(tokens: list[str]) -> dict[str, Any]:
     list). A bracketed value whose elements are not valid JSON is parsed as a
     list of bare, comma-separated items (``[a, b]`` → ``["a", "b"]``), so CLI
     lists of strings need no per-element quoting. Anything else falls back to
-    the raw string. Pydantic re-validates at assignment, so the coercion is a
-    hint, not a contract.
+    the raw string. Pydantic re-validates the merged config, so the coercion
+    is a hint, not a contract.
 
     Args:
         tokens: List of CLI tokens, each of the form ``key=value``.
@@ -40,7 +40,7 @@ def _coerce(raw: str) -> Any:
         return None
     try:
         return json.loads(raw)
-    except (ValueError, json.JSONDecodeError):
+    except ValueError:  # includes json.JSONDecodeError
         pass
     # A bracketed value whose elements are not valid JSON is treated as a list of bare,
     # comma-separated items: ``[a, b]`` -> ``["a", "b"]`` — so a CLI string list needs

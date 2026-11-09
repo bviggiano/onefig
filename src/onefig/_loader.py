@@ -68,22 +68,23 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     """
     path = Path(path)
     logger.debug("Loading config from %s", path)
-    merged = _compose(path, _seen=set())
+    merged = _compose(path, chain=())
     return OmegaConf.to_container(merged, resolve=True)  # type: ignore[return-value]
 
 
-def _compose(path: Path, *, _seen: set[Path]) -> DictConfig:
+def _compose(path: Path, *, chain: tuple[Path, ...]) -> DictConfig:
     """Recursively merge an ``extends:`` chain into a single DictConfig.
 
-    Maintains a set of resolved absolute paths along the current chain to
-    detect cycles. Interpolations are NOT resolved here — that happens
-    once at the top of :func:`load_yaml`, after the entire chain has been
-    merged, so cross-file references are sound.
+    ``chain`` holds the resolved absolute paths from the root file down to
+    ``path``, in order, to detect cycles and report them readably.
+    Interpolations are NOT resolved here — that happens once at the top of
+    :func:`load_yaml`, after the entire chain has been merged, so cross-file
+    references are sound.
     """
     resolved = path.resolve()
-    if resolved in _seen:
-        chain = " → ".join(str(p) for p in _seen) + f" → {resolved}"
-        raise ValueError(f"Cycle in extends chain: {chain}")
+    if resolved in chain:
+        cycle = " → ".join(str(p) for p in (*chain, resolved))
+        raise ValueError(f"Cycle in extends chain: {cycle}")
 
     cfg = OmegaConf.load(path)
     if not isinstance(cfg, DictConfig):
@@ -97,10 +98,10 @@ def _compose(path: Path, *, _seen: set[Path]) -> DictConfig:
 
     parent_paths = _resolve_extends(parents_raw, base_dir=path.parent, source=path)
 
-    next_seen = _seen | {resolved}
+    next_chain = (*chain, resolved)
     merged: Any = OmegaConf.create({})  # merge() widens to ListConfig | DictConfig
     for parent_path in parent_paths:
-        parent = _compose(parent_path, _seen=next_seen)
+        parent = _compose(parent_path, chain=next_chain)
         merged = OmegaConf.merge(merged, parent)
     return OmegaConf.merge(merged, cfg)  # type: ignore[return-value]
 

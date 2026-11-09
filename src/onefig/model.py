@@ -40,6 +40,14 @@ def _dump_value(value: Any) -> Any:
     return value
 
 
+def _flag_value(tokens: list[str], flag: str, default: str) -> str | None:
+    """Return the token after ``flag`` (``default`` if none), or ``None`` if absent."""
+    if flag not in tokens:
+        return None
+    idx = tokens.index(flag)
+    return tokens[idx + 1] if idx + 1 < len(tokens) else default
+
+
 def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
     """Error text for a bare leaf/suffix attribute (shortcuts are CLI/env-only).
 
@@ -148,9 +156,10 @@ class ConfigModel(BaseModel):
         """
         path = resolve_path(name_or_path, search_root=search_root)
         data = load_yaml(path)
-        with clean_validation_errors(cls, name=config_name or path.stem):
+        name = config_name or path.stem
+        with clean_validation_errors(cls, name=name):
             instance = cls.model_validate(data)
-        object.__setattr__(instance, "_config_name", config_name or path.stem)
+        object.__setattr__(instance, "_config_name", name)
         return instance
 
     @classmethod
@@ -252,7 +261,7 @@ class ConfigModel(BaseModel):
             is unambiguous (otherwise raises).
 
         Values are best-effort JSON-coerced (``5`` → int, ``true`` → bool,
-        ``[1,2]`` → list, ...) before Pydantic re-validates at assignment.
+        ``[1,2]`` → list, ...) before Pydantic re-validates the merged config.
 
         Args:
             prefix: Required prefix to scope which env vars are consumed.
@@ -350,25 +359,22 @@ class ConfigModel(BaseModel):
             args = sys.argv[1:]
         tokens = list(args)
 
-        if "--onefig-install-completion" in tokens:
-            idx = tokens.index("--onefig-install-completion")
-            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+        shell = _flag_value(tokens, "--onefig-install-completion", "bash")
+        if shell is not None:
             print(self.shell_completion_script(shell))
             if exit_on_completion:
                 sys.exit(0)
             return
 
-        if "--onefig-install-python-completion" in tokens:
-            idx = tokens.index("--onefig-install-python-completion")
-            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+        shell = _flag_value(tokens, "--onefig-install-python-completion", "bash")
+        if shell is not None:
             print(self.python_wrapper_completion_script(shell))
             if exit_on_completion:
                 sys.exit(0)
             return
 
-        if "--onefig-completions" in tokens:
-            idx = tokens.index("--onefig-completions")
-            partial = tokens[idx + 1] if idx + 1 < len(tokens) else ""
+        partial = _flag_value(tokens, "--onefig-completions", "")
+        if partial is not None:
             for cand in self.completion_candidates():
                 if cand.startswith(partial):
                     print(cand)
@@ -726,12 +732,9 @@ class ConfigModel(BaseModel):
             name in cls.model_fields
             or name in cls.__private_attributes__
             or name.startswith("__")
-        ):
-            super().__setattr__(name, value)
-            return
-
-        if hasattr(cls, name):
             # A class-level descriptor (e.g. a property setter): defer to normal Python.
+            or hasattr(cls, name)
+        ):
             super().__setattr__(name, value)
             return
 
