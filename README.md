@@ -1,7 +1,7 @@
 # onefig
 
 [![PyPI](https://img.shields.io/pypi/v/onefig.svg)](https://pypi.org/project/onefig/)
-[![Downloads](https://static.pepy.tech/badge/onefig/month)](https://pepy.tech/project/onefig)
+[![Downloads](https://static.pepy.tech/badge/onefig)](https://pepy.tech/project/onefig)
 [![Python versions](https://img.shields.io/pypi/pyversions/onefig)](https://pypi.org/project/onefig/)
 [![CI](https://github.com/bviggiano/onefig/actions/workflows/ci.yml/badge.svg)](https://github.com/bviggiano/onefig/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
