@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from typing_extensions import Self
 
 from onefig._errors import ConfigError
-from onefig._overrides import _resolve_keys, _set_dotted
+from onefig._overrides import _resolve_keys, apply_overrides
 from onefig.model import ConfigModel
 
 # Distributions that draw from a numeric [min, max] range.
@@ -296,7 +296,7 @@ class WandbSweepConfig(ConfigModel):
             for value, role in param.candidate_values():
                 trial = base.model_copy(deep=True)
                 try:
-                    _set_dotted(trial, path, value)
+                    apply_overrides(trial, {path: value})
                 except (ValidationError, ValueError) as exc:
                     problems.append(
                         f"{path} {role}={value!r} is rejected: {_reason(exc)}"
