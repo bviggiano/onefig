@@ -134,19 +134,7 @@ YAML files support `${...}` interpolation and `extends:` composition; see
 
 ## Documentation
 
-Full guides live at **[bviggiano.github.io/onefig](https://bviggiano.github.io/onefig/)**:
-
-- [Command-line overrides](https://bviggiano.github.io/onefig/cli/)
-- [Environment variables](https://bviggiano.github.io/onefig/env/)
-- [Shell tab completion](https://bviggiano.github.io/onefig/completion/)
-- [YAML composition](https://bviggiano.github.io/onefig/yaml/)
-- [Validation and freezing](https://bviggiano.github.io/onefig/validation/)
-- [Experiment tracking](https://bviggiano.github.io/onefig/experiments/)
-- [Diffing configs](https://bviggiano.github.io/onefig/diff/)
-- [Integrations](https://bviggiano.github.io/onefig/integrations/)
-- [API reference](https://bviggiano.github.io/onefig/api/)
-
-Runnable scripts for every feature live in [`examples/`](examples/).
+Full documentation: **[bviggiano.github.io/onefig](https://bviggiano.github.io/onefig/)**
 
 ## License
 

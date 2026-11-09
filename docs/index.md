@@ -77,5 +77,5 @@ YAML files support `${...}` interpolation and `extends:` composition; see
 - [Validation and freezing](validation.md): derived fields and immutable configs.
 - [Experiment tracking](experiments.md): snapshots, commit hashes, and hyperparameter logging.
 - [Diffing configs](diff.md): see exactly what changed between runs.
-- [Integrations](integrations.md): typed configs for external tools such as W&B sweeps.
+- [Integrations](integrations/index.md): typed configs for external tools such as W&B sweeps.
 - [API reference](api.md): every public method at a glance.

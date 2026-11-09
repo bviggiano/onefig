@@ -15,7 +15,9 @@ nav:
       - Validation and freezing: validation.md
       - Experiment tracking: experiments.md
       - Diffing configs: diff.md
-  - Integrations: integrations.md
+  - Integrations:
+      - integrations/index.md
+      - Weights & Biases: integrations/wandb.md
   - API reference: api.md
   - Examples: https://github.com/bviggiano/onefig/tree/main/examples
 
@@ -24,6 +26,7 @@ theme:
   features:
     - navigation.instant
     - navigation.sections
+    - navigation.indexes
     - content.code.copy
     - search.highlight
   palette:
@@ -38,8 +41,13 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+extra_css:
+  - stylesheets/extra.css
+
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true

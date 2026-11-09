@@ -1,21 +1,4 @@
-# Integrations
-
-Typed onefig configs for the file **formats** of external tools.
-
-Each integration models a third-party configuration format as a onefig `ConfigModel`, so you get the same
-load-time validation and field-tree error reporting for a tool's config that you get for your own. Because only
-the *format* is modeled — never the tool's Python package — importing an integration **adds no dependency**:
-`onefig.integrations.wandb` works whether or not `wandb` is installed.
-
-| Integration | Module | Models |
-| --- | --- | --- |
-| Weights & Biases | `onefig.integrations.wandb` | Sweep configuration |
-
-More may be added over time (other experiment trackers, schedulers, etc.).
-
----
-
-## <img src="https://raw.githubusercontent.com/bviggiano/onefig/main/assets/wandb-logo.svg" alt="W&B" height="18"> Weights & Biases
+# Weights & Biases
 
 `WandbSweepConfig` models the [wandb sweep configuration
 format](https://docs.wandb.ai/guides/sweeps/define-sweep-configuration). wandb's sweep schema is precise and
@@ -49,7 +32,7 @@ A malformed sweep is reported before it ever reaches wandb:
 
 `to_wandb()` returns the plain dict `wandb.sweep()` expects.
 
-### Validate against your config
+## Validate against your config
 
 The checks above are about the sweep *format*. You can go further and validate a sweep against a **specific**
 config with `validate_against`, which applies each swept value to your config and runs its real validation:
