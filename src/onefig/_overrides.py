@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from onefig._errors import FROZEN_HINT, FrozenConfigError
+
 
 def apply_overrides(
     model: BaseModel,
@@ -40,11 +42,8 @@ def apply_overrides(
     if not resolved:
         return
     if getattr(model, "_frozen", False):
-        from onefig.model import FrozenConfigError
-
         raise FrozenConfigError(
-            "Cannot apply overrides: config is frozen. "
-            "Create a new instance via .from_dict() or .model_copy()."
+            f"Cannot apply overrides: config is frozen. {FROZEN_HINT}"
         )
     # Merge every override into a plain mapping, then re-validate the whole config
     # once, so cross-field validators run against the final merged state and the

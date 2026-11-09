@@ -24,6 +24,15 @@ _MSG_PREFIXES = ("Value error, ", "Assertion failed, ")
 _TYPE_NAMES = {"int": "integer", "float": "number", "bool": "boolean", "str": "string"}
 
 
+# Recovery hint shared by every frozen-mutation error. ``model_copy()`` is not
+# offered: it carries ``_frozen`` over, so the copy is frozen too.
+FROZEN_HINT = "Create a new instance via .from_dict(cfg.to_dict())."
+
+
+class FrozenConfigError(RuntimeError):
+    """Raised when an attempt is made to mutate a frozen config."""
+
+
 class ConfigError(ValueError):
     """Raised when configuration data fails validation.
 

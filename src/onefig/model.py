@@ -20,7 +20,7 @@ from onefig._completion import (
 )
 from onefig._diff import compute_diff, format_against_defaults, format_diff
 from onefig._env import parse_env
-from onefig._errors import clean_validation_errors
+from onefig._errors import FROZEN_HINT, FrozenConfigError, clean_validation_errors
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
@@ -38,10 +38,6 @@ def _dump_value(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return dataclasses.asdict(value)
     return value
-
-
-class FrozenConfigError(RuntimeError):
-    """Raised when an attempt is made to mutate a frozen config."""
 
 
 def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
@@ -722,8 +718,7 @@ class ConfigModel(BaseModel):
     def __setattr__(self, name: str, value: Any) -> None:
         if getattr(self, "_frozen", False):
             raise FrozenConfigError(
-                f"Cannot set {name!r}: config is frozen. "
-                "Create a new instance via .from_dict() or .model_copy()."
+                f"Cannot set {name!r}: config is frozen. {FROZEN_HINT}"
             )
 
         cls = type(self)
