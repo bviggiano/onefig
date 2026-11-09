@@ -66,7 +66,7 @@ def _resolve_override_paths(
     Returns ``(path, value)`` pairs. Raises on an ambiguous leaf key, or (when
     ``strict``) an unknown key; otherwise skips unknown keys.
     """
-    candidates = _resolve_keys(model)
+    candidates = resolve_keys(model)
     resolved: list[tuple[str, Any]] = []
     for key, value in args.items():
         paths = candidates.get(key)
@@ -92,7 +92,7 @@ def _assign_in_mapping(data: dict[str, Any], path: list[str], value: Any) -> Non
     cursor[path[-1]] = value
 
 
-def _resolve_keys(model: BaseModel) -> dict[str, list[str]]:
+def resolve_keys(model: BaseModel) -> dict[str, list[str]]:
     """Map every accepted user-input key to its candidate full paths.
 
     Each full dotted path maps to itself. Each *suffix subpath* of a full path

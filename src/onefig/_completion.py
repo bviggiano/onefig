@@ -4,7 +4,7 @@ import shlex
 
 from pydantic import BaseModel
 
-from onefig._overrides import _resolve_keys
+from onefig._overrides import resolve_keys
 
 _SPECIAL_FLAGS = ("--show", "--help", "-h")
 
@@ -25,7 +25,7 @@ def completion_candidates(model: BaseModel) -> list[str]:
     Returns:
         A flat list of completion strings, in stable insertion order.
     """
-    candidates = _resolve_keys(model)
+    candidates = resolve_keys(model)
     seen: set[str] = set()
     out: list[str] = []
     for key, paths in candidates.items():

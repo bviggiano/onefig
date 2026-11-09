@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from onefig._cli import _coerce
+from onefig._cli import coerce_value
 
 
 def parse_env(
@@ -59,5 +59,5 @@ def parse_env(
         key = ".".join(segments)
         if not case_sensitive:
             key = key.lower()
-        out[key] = _coerce(raw_value)
+        out[key] = coerce_value(raw_value)
     return out

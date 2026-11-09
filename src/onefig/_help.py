@@ -9,7 +9,7 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from onefig._overrides import _resolve_keys
+from onefig._overrides import resolve_keys
 
 try:
     from types import UnionType  # Python 3.10+
@@ -113,7 +113,7 @@ def _walk(
 
 def _leaf_uniqueness(model: BaseModel) -> dict[str, bool]:
     """Map every leaf name to whether it resolves uniquely as a CLI shortcut."""
-    candidates = _resolve_keys(model)
+    candidates = resolve_keys(model)
     return {key: len(paths) == 1 for key, paths in candidates.items()}
 
 

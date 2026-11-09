@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from typing_extensions import Self
 
 from onefig._errors import ConfigError
-from onefig._overrides import _resolve_keys, apply_overrides
+from onefig._overrides import apply_overrides, resolve_keys
 from onefig.model import ConfigModel
 
 # Distributions that draw from a numeric [min, max] range.
@@ -285,7 +285,7 @@ class WandbSweepConfig(ConfigModel):
         Raises :class:`ConfigError` listing every problem found; a no-op if the
         sweep is fully compatible.
         """
-        valid_paths = {path for paths in _resolve_keys(base).values() for path in paths}
+        valid_paths = {path for paths in resolve_keys(base).values() for path in paths}
         problems: list[str] = []
         for path, param in self._leaf_parameters():
             if path not in valid_paths:

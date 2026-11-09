@@ -25,7 +25,7 @@ from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._overrides import _resolve_keys, apply_overrides
+from onefig._overrides import apply_overrides, resolve_keys
 
 
 def _dump_value(value: Any) -> Any:
@@ -55,7 +55,7 @@ def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
     else a plain missing-attribute message.
     """
     who = type(model).__name__
-    paths = _resolve_keys(model).get(name)
+    paths = resolve_keys(model).get(name)
     if not paths or paths == [name]:
         return f"{name!r} is not a field of {who}."
     if len(paths) == 1:

@@ -31,11 +31,11 @@ def parse_overrides(tokens: list[str]) -> dict[str, Any]:
         key, _, raw = tok.partition("=")
         if not key:
             raise ValueError(f"Bad override token {tok!r}: empty key.")
-        out[key] = _coerce(raw)
+        out[key] = coerce_value(raw)
     return out
 
 
-def _coerce(raw: str) -> Any:
+def coerce_value(raw: str) -> Any:
     if raw == "None":
         return None
     try:
@@ -48,5 +48,7 @@ def _coerce(raw: str) -> Any:
     # An element with a comma (e.g. a regex ``{n,m}``) still needs JSON quoting.
     if len(raw) >= 2 and raw[0] == "[" and raw[-1] == "]":
         inner = raw[1:-1].strip()
-        return [_coerce(part.strip()) for part in inner.split(",")] if inner else []
+        return (
+            [coerce_value(part.strip()) for part in inner.split(",")] if inner else []
+        )
     return raw
