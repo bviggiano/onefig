@@ -106,11 +106,6 @@ class SweepParameter(BaseModel):
             or self.distribution in ("constant", "categorical")
         )
 
-    @property
-    def is_nested(self) -> bool:
-        """Whether this is a nested ``parameters`` group rather than a leaf."""
-        return self.parameters is not None
-
     def candidate_values(self) -> list[tuple[Any, str]]:
         """Representative ``(value, role)`` pairs to probe against a target field.
 
@@ -266,7 +261,7 @@ class WandbSweepConfig(ConfigModel):
 
     def _leaf_parameters(self) -> Iterator[tuple[str, SweepParameter]]:
         for path, param in self.parameters.items():
-            if param.is_nested and param.parameters is not None:
+            if param.parameters is not None:
                 for sub, child in param.parameters.items():
                     yield f"{path}.{sub}", child
             else:
