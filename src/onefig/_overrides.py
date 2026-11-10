@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from onefig._errors import FROZEN_HINT, FrozenConfigError
+
 
 def apply_overrides(
     model: BaseModel,
@@ -40,11 +42,8 @@ def apply_overrides(
     if not resolved:
         return
     if getattr(model, "_frozen", False):
-        from onefig.model import FrozenConfigError
-
         raise FrozenConfigError(
-            "Cannot apply overrides: config is frozen. "
-            "Create a new instance via .from_dict() or .model_copy()."
+            f"Cannot apply overrides: config is frozen. {FROZEN_HINT}"
         )
     # Merge every override into a plain mapping, then re-validate the whole config
     # once, so cross-field validators run against the final merged state and the
@@ -67,7 +66,7 @@ def _resolve_override_paths(
     Returns ``(path, value)`` pairs. Raises on an ambiguous leaf key, or (when
     ``strict``) an unknown key; otherwise skips unknown keys.
     """
-    candidates = _resolve_keys(model)
+    candidates = resolve_keys(model)
     resolved: list[tuple[str, Any]] = []
     for key, value in args.items():
         paths = candidates.get(key)
@@ -93,7 +92,7 @@ def _assign_in_mapping(data: dict[str, Any], path: list[str], value: Any) -> Non
     cursor[path[-1]] = value
 
 
-def _resolve_keys(model: BaseModel) -> dict[str, list[str]]:
+def resolve_keys(model: BaseModel) -> dict[str, list[str]]:
     """Map every accepted user-input key to its candidate full paths.
 
     Each full dotted path maps to itself. Each *suffix subpath* of a full path
@@ -149,44 +148,3 @@ def _iter_full_paths(node: Any, prefix: str = ""):
         return
     for name in names:
         yield from _iter_full_paths(getattr(node, name), f"{prefix}{name}.")
-
-
-def _set_dotted(model: BaseModel, dotted_path: str, value: Any) -> None:
-    """Assign ``value`` at ``dotted_path``, routing through the owning model.
-
-    Descends through nested models to the deepest one on the path. If the
-    remaining segments address a plain dataclass field, the dataclass value is
-    rebuilt with the override merged in and reassigned to its model field, so
-    that model's ``validate_assignment`` re-runs coercion and validation on the
-    whole field (for a discriminated union, that re-discriminates and re-checks
-    the variant). Otherwise the leaf is assigned directly.
-    """
-    parts = dotted_path.split(".")
-    parent: Any = model
-    idx = 0
-    while idx < len(parts) - 1 and isinstance(getattr(parent, parts[idx]), BaseModel):
-        parent = getattr(parent, parts[idx])
-        idx += 1
-
-    field_name = parts[idx]
-    rest = parts[idx + 1 :]
-    if not rest:
-        setattr(parent, field_name, value)
-        return
-
-    merged = _merge_into(getattr(parent, field_name), rest, value)
-    setattr(parent, field_name, merged)
-
-
-def _merge_into(node: Any, path: list[str], value: Any) -> dict[str, Any]:
-    """Return ``node`` as a nested dict with ``path`` set to ``value``.
-
-    ``node`` is a dataclass instance; ``dataclasses.asdict`` gives a plain,
-    fully-owned mapping that Pydantic can re-validate on assignment.
-    """
-    data = dataclasses.asdict(node)
-    cursor = data
-    for key in path[:-1]:
-        cursor = cursor[key]
-    cursor[path[-1]] = value
-    return data

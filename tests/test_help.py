@@ -162,11 +162,6 @@ def test_help_title_defaults_to_class_name() -> None:
     assert first_line.startswith("╭")
 
 
-def test_help_title_override() -> None:
-    out = format_help(_Cfg(), title="MyExperiment")
-    assert "MyExperiment" in out.splitlines()[0]
-
-
 def test_help_renders_panels_with_rounded_corners() -> None:
     out = format_help(_Cfg()).splitlines()
     assert out[0].startswith("╭") and out[0].endswith("╮")

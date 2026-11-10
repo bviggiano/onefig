@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from typing_extensions import Self
 
 from onefig._errors import ConfigError
-from onefig._overrides import _resolve_keys, _set_dotted
+from onefig._overrides import apply_overrides, resolve_keys
 from onefig.model import ConfigModel
 
 # Distributions that draw from a numeric [min, max] range.
@@ -105,11 +105,6 @@ class SweepParameter(BaseModel):
             or self.values is not None
             or self.distribution in ("constant", "categorical")
         )
-
-    @property
-    def is_nested(self) -> bool:
-        """Whether this is a nested ``parameters`` group rather than a leaf."""
-        return self.parameters is not None
 
     def candidate_values(self) -> list[tuple[Any, str]]:
         """Representative ``(value, role)`` pairs to probe against a target field.
@@ -266,7 +261,7 @@ class WandbSweepConfig(ConfigModel):
 
     def _leaf_parameters(self) -> Iterator[tuple[str, SweepParameter]]:
         for path, param in self.parameters.items():
-            if param.is_nested and param.parameters is not None:
+            if param.parameters is not None:
                 for sub, child in param.parameters.items():
                     yield f"{path}.{sub}", child
             else:
@@ -285,7 +280,7 @@ class WandbSweepConfig(ConfigModel):
         Raises :class:`ConfigError` listing every problem found; a no-op if the
         sweep is fully compatible.
         """
-        valid_paths = {path for paths in _resolve_keys(base).values() for path in paths}
+        valid_paths = {path for paths in resolve_keys(base).values() for path in paths}
         problems: list[str] = []
         for path, param in self._leaf_parameters():
             if path not in valid_paths:
@@ -296,7 +291,7 @@ class WandbSweepConfig(ConfigModel):
             for value, role in param.candidate_values():
                 trial = base.model_copy(deep=True)
                 try:
-                    _set_dotted(trial, path, value)
+                    apply_overrides(trial, {path: value})
                 except (ValidationError, ValueError) as exc:
                     problems.append(
                         f"{path} {role}={value!r} is rejected: {_reason(exc)}"

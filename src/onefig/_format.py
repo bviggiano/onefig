@@ -20,31 +20,23 @@ def format_tree(data: Any, name: str = "Config") -> str:
 
 
 def _render(data: Any, prefix: str) -> list[str]:
-    lines: list[str] = []
-
     if isinstance(data, dict):
         items = list(data.items())
-        last = len(items) - 1
-        for i, (key, value) in enumerate(items):
-            connector = "└── " if i == last else "├── "
-            child_prefix = prefix + ("    " if i == last else "│   ")
-            if isinstance(value, (dict, list)):
-                lines.append(f"{prefix}{connector}{key}:")
-                lines.extend(_render(value, child_prefix))
-            else:
-                lines.append(f"{prefix}{connector}{key}: {value!r}")
-
     elif isinstance(data, list):
-        last = len(data) - 1
-        for i, item in enumerate(data):
-            connector = "└── " if i == last else "├── "
-            child_prefix = prefix + ("    " if i == last else "│   ")
-            if isinstance(item, (dict, list)):
-                lines.append(f"{prefix}{connector}[{i}]:")
-                lines.extend(_render(item, child_prefix))
-            else:
-                lines.append(f"{prefix}{connector}[{i}]: {item!r}")
+        items = [(f"[{i}]", item) for i, item in enumerate(data)]
+    else:
+        return []
 
+    lines: list[str] = []
+    last = len(items) - 1
+    for i, (label, value) in enumerate(items):
+        connector = "└── " if i == last else "├── "
+        child_prefix = prefix + ("    " if i == last else "│   ")
+        if isinstance(value, (dict, list)):
+            lines.append(f"{prefix}{connector}{label}:")
+            lines.extend(_render(value, child_prefix))
+        else:
+            lines.append(f"{prefix}{connector}{label}: {value!r}")
     return lines
 
 

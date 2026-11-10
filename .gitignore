@@ -7,6 +7,10 @@ __pycache__/
 .Python
 build/
 dist/
+site/
+
+# Example output (examples/07_freeze_and_snapshot.py)
+runs/
 *.egg-info/
 *.egg
 

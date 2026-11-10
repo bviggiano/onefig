@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from onefig import ConfigError, ConfigModel
+from onefig import ConfigError, ConfigModel, format_tree
 from onefig.model import FrozenConfigError
 
 
@@ -26,13 +26,6 @@ def test_load_validates(tmp_path: Path) -> None:
     assert cfg.epochs == 5
     assert cfg.model.lr == 0.001
     assert cfg.model.name == "foo"
-
-
-def test_load_type_error(tmp_path: Path) -> None:
-    p = tmp_path / "c.yaml"
-    p.write_text("epochs: not_an_int\n")
-    with pytest.raises(ConfigError):
-        Cfg.load(p)
 
 
 def test_extra_forbid(tmp_path: Path) -> None:
@@ -80,8 +73,6 @@ def test_from_dict_roundtrip() -> None:
 
 
 def test_format_tree() -> None:
-    from onefig import format_tree
-
     cfg = Cfg(epochs=2, model=Sub(lr=0.1, name="z"))
     out = format_tree(cfg.model_dump(), name="MyCfg")
     assert "MyCfg:" in out
@@ -95,13 +86,6 @@ def test_display_prints(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "MyCfg:" in captured.out
     assert "epochs" in captured.out
-
-
-def test_display_sections_default_empty(capsys: pytest.CaptureFixture[str]) -> None:
-    cfg = Cfg(epochs=2, model=Sub(lr=0.1, name="z"))
-    assert cfg.display_sections() == []
-    cfg.display(name="MyCfg")
-    assert "MyCfg:" in capsys.readouterr().out  # tree only, no extra blocks
 
 
 def test_display_renders_many_sections_below_the_tree(

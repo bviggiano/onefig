@@ -9,7 +9,7 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from onefig._overrides import _resolve_keys
+from onefig._overrides import resolve_keys
 
 try:
     from types import UnionType  # Python 3.10+
@@ -55,11 +55,8 @@ def format_help(model: BaseModel, title: str | None = None) -> str:
         width=text_width,
     )
 
-    top_path, top_fields = groups[0]
-    top_lines = _render_field_lines(top_fields, leaf_unique, text_width)
-    top_sections: list[Sequence[str]] = [intro]
-    if top_lines:
-        top_sections.append(top_lines)
+    top_fields = groups[0][1]
+    top_sections = [intro, _render_field_lines(top_fields, leaf_unique, text_width)]
     panels.append(_render_panel(header, sections=top_sections, width=width))
 
     for path, fields in groups[1:]:
@@ -113,7 +110,7 @@ def _walk(
 
 def _leaf_uniqueness(model: BaseModel) -> dict[str, bool]:
     """Map every leaf name to whether it resolves uniquely as a CLI shortcut."""
-    candidates = _resolve_keys(model)
+    candidates = resolve_keys(model)
     return {key: len(paths) == 1 for key, paths in candidates.items()}
 
 
@@ -131,10 +128,7 @@ def _render_field_lines(
         current_str = _format_value(current)
         default_str = _format_default(info)
 
-        if name == full or not leaf_unique.get(name, False):
-            label = full
-        else:
-            label = name
+        label = name if leaf_unique.get(name, False) else full
 
         out.extend(
             _render_entry(
@@ -176,7 +170,7 @@ def _render_entry(
             subsequent_indent=_HANG,
             break_long_words=False,
             break_on_hyphens=False,
-        ) or [head]
+        )
 
     desc = " ".join(description.splitlines()).strip() if description else ""
     if default_str is not None and default_str != current_str:

@@ -1,0 +1,33 @@
+.integration-card {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  margin: 1.2rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.integration-card:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: var(--md-shadow-z2);
+}
+
+.integration-card__logo {
+  flex: 0 0 3.5rem;
+}
+
+.integration-card__logo img {
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.integration-card__body > :first-child {
+  margin-top: 0;
+}
+
+.integration-card__body > :last-child {
+  margin-bottom: 0;
+}

@@ -20,12 +20,12 @@ from onefig._completion import (
 )
 from onefig._diff import compute_diff, format_against_defaults, format_diff
 from onefig._env import parse_env
-from onefig._errors import clean_validation_errors
+from onefig._errors import FROZEN_HINT, FrozenConfigError, clean_validation_errors
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._overrides import _resolve_keys, apply_overrides
+from onefig._overrides import apply_overrides, resolve_keys
 
 
 def _dump_value(value: Any) -> Any:
@@ -40,8 +40,12 @@ def _dump_value(value: Any) -> Any:
     return value
 
 
-class FrozenConfigError(RuntimeError):
-    """Raised when an attempt is made to mutate a frozen config."""
+def _flag_value(tokens: list[str], flag: str, default: str) -> str | None:
+    """Return the token after ``flag`` (``default`` if none), or ``None`` if absent."""
+    if flag not in tokens:
+        return None
+    idx = tokens.index(flag)
+    return tokens[idx + 1] if idx + 1 < len(tokens) else default
 
 
 def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
@@ -51,7 +55,7 @@ def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
     else a plain missing-attribute message.
     """
     who = type(model).__name__
-    paths = _resolve_keys(model).get(name)
+    paths = resolve_keys(model).get(name)
     if not paths or paths == [name]:
         return f"{name!r} is not a field of {who}."
     if len(paths) == 1:
@@ -152,9 +156,10 @@ class ConfigModel(BaseModel):
         """
         path = resolve_path(name_or_path, search_root=search_root)
         data = load_yaml(path)
-        with clean_validation_errors(cls, name=config_name or path.stem):
+        name = config_name or path.stem
+        with clean_validation_errors(cls, name=name):
             instance = cls.model_validate(data)
-        object.__setattr__(instance, "_config_name", config_name or path.stem)
+        object.__setattr__(instance, "_config_name", name)
         return instance
 
     @classmethod
@@ -256,7 +261,7 @@ class ConfigModel(BaseModel):
             is unambiguous (otherwise raises).
 
         Values are best-effort JSON-coerced (``5`` → int, ``true`` → bool,
-        ``[1,2]`` → list, ...) before Pydantic re-validates at assignment.
+        ``[1,2]`` → list, ...) before Pydantic re-validates the merged config.
 
         Args:
             prefix: Required prefix to scope which env vars are consumed.
@@ -354,25 +359,22 @@ class ConfigModel(BaseModel):
             args = sys.argv[1:]
         tokens = list(args)
 
-        if "--onefig-install-completion" in tokens:
-            idx = tokens.index("--onefig-install-completion")
-            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+        shell = _flag_value(tokens, "--onefig-install-completion", "bash")
+        if shell is not None:
             print(self.shell_completion_script(shell))
             if exit_on_completion:
                 sys.exit(0)
             return
 
-        if "--onefig-install-python-completion" in tokens:
-            idx = tokens.index("--onefig-install-python-completion")
-            shell = tokens[idx + 1] if idx + 1 < len(tokens) else "bash"
+        shell = _flag_value(tokens, "--onefig-install-python-completion", "bash")
+        if shell is not None:
             print(self.python_wrapper_completion_script(shell))
             if exit_on_completion:
                 sys.exit(0)
             return
 
-        if "--onefig-completions" in tokens:
-            idx = tokens.index("--onefig-completions")
-            partial = tokens[idx + 1] if idx + 1 < len(tokens) else ""
+        partial = _flag_value(tokens, "--onefig-completions", "")
+        if partial is not None:
             for cand in self.completion_candidates():
                 if cand.startswith(partial):
                     print(cand)
@@ -423,9 +425,9 @@ class ConfigModel(BaseModel):
         """Return tab-completion candidates for this config's CLI overrides.
 
         Each scalar field contributes its full dotted path suffixed with
-        ``=`` (e.g. ``"optimizer.lr="``); unambiguous leaf names are
-        offered as shorthands; ambiguous leaves are omitted. Special flags
-        (``--show``, ``--help``, ``-h``) are appended.
+        ``=`` (e.g. ``"optimizer.lr="``); unambiguous suffix subpaths,
+        including the bare leaf, are offered as shorthands; ambiguous ones are
+        omitted. Special flags (``--show``, ``--help``, ``-h``) are appended.
 
         Used by the shell completion scripts emitted by
         :meth:`shell_completion_script`.
@@ -722,8 +724,7 @@ class ConfigModel(BaseModel):
     def __setattr__(self, name: str, value: Any) -> None:
         if getattr(self, "_frozen", False):
             raise FrozenConfigError(
-                f"Cannot set {name!r}: config is frozen. "
-                "Create a new instance via .from_dict() or .model_copy()."
+                f"Cannot set {name!r}: config is frozen. {FROZEN_HINT}"
             )
 
         cls = type(self)
@@ -731,12 +732,9 @@ class ConfigModel(BaseModel):
             name in cls.model_fields
             or name in cls.__private_attributes__
             or name.startswith("__")
-        ):
-            super().__setattr__(name, value)
-            return
-
-        if hasattr(cls, name):
             # A class-level descriptor (e.g. a property setter): defer to normal Python.
+            or hasattr(cls, name)
+        ):
             super().__setattr__(name, value)
             return
 

@@ -3,10 +3,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-_RED = "\033[31m"
-_GREEN = "\033[32m"
-_DIM = "\033[2m"
-_RESET = "\033[0m"
+from onefig._ansi import DIM, GREEN, RED, style
 
 
 class _MissingType:
@@ -89,8 +86,8 @@ def format_diff(
     lines: list[str] = []
     for (key, (old, new)), old_str, new_str in zip(diff.items(), raw_olds, raw_news):
         old_padded = old_str.ljust(old_width)
-        old_styled = _style_value(old_padded, old, _RED, enabled=use_color)
-        new_styled = _style_value(new_str, new, _GREEN, enabled=use_color)
+        old_styled = _style_value(old_padded, old, RED, enabled=use_color)
+        new_styled = _style_value(new_str, new, GREEN, enabled=use_color)
         lines.append(f"  {key.ljust(key_width)}  {old_styled}  →  {new_styled}")
     return "\n".join(lines)
 
@@ -131,7 +128,9 @@ def format_against_defaults(
     key_width = max(len(k) for k in keys)
 
     overridden_olds = [
-        repr(defaults[k]) for k in keys if k in defaults and defaults[k] != current[k]
+        _format_value(defaults[k])
+        for k in keys
+        if k in defaults and defaults[k] != current[k]
     ]
     old_width = max((len(s) for s in overridden_olds), default=0)
 
@@ -142,14 +141,14 @@ def format_against_defaults(
         cur_repr = repr(cur_val)
         if key in defaults and defaults[key] == cur_val:
             # Unchanged — single green value, no arrow.
-            value_styled = _style(cur_repr, _GREEN, enabled=use_color)
+            value_styled = style(cur_repr, GREEN, enabled=use_color)
             lines.append(f"  {key_col}  {value_styled}")
         else:
             # Overridden — default in red, current in green.
-            default_repr = repr(defaults[key]) if key in defaults else "<MISSING>"
+            default_repr = _format_value(defaults.get(key, MISSING))
             old_padded = default_repr.ljust(old_width)
-            old_styled = _style(old_padded, _RED, enabled=use_color)
-            new_styled = _style(cur_repr, _GREEN, enabled=use_color)
+            old_styled = style(old_padded, RED, enabled=use_color)
+            new_styled = style(cur_repr, GREEN, enabled=use_color)
             lines.append(f"  {key_col}  {old_styled}  →  {new_styled}")
     return "\n".join(lines)
 
@@ -163,13 +162,4 @@ def _format_value(value: Any) -> str:
 def _style_value(text: str, value: Any, color_code: str, *, enabled: bool) -> str:
     """Style a value's rendered text. MISSING dims; everything else uses
     its side's color."""
-    if not enabled:
-        return text
-    code = _DIM if value is MISSING else color_code
-    return f"{code}{text}{_RESET}"
-
-
-def _style(text: str, color_code: str, *, enabled: bool) -> str:
-    if not enabled:
-        return text
-    return f"{color_code}{text}{_RESET}"
+    return style(text, DIM if value is MISSING else color_code, enabled=enabled)
