@@ -13,6 +13,7 @@ nav:
       - Shell tab completion: completion.md
       - YAML composition: yaml.md
       - Validation and freezing: validation.md
+      - Swappable components: unions.md
       - Experiment tracking: experiments.md
       - Diffing configs: diff.md
   - Integrations:

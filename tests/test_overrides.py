@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from argparse import Namespace
 from dataclasses import dataclass
-from typing import Literal
 
 import pytest
 from pydantic import model_validator
@@ -223,7 +222,6 @@ def test_top_level_full_path_beats_nested_leaf() -> None:
 
 @dataclass
 class _Adam:
-    name: Literal["adam"] = "adam"
     lr: float = 1e-3
 
     def __post_init__(self) -> None:
@@ -233,7 +231,6 @@ class _Adam:
 
 @dataclass
 class _SGD:
-    name: Literal["sgd"] = "sgd"
     lr: float = 1e-2
     momentum: float = 0.9
 
@@ -296,3 +293,83 @@ def test_dataclass_leaf_offered_as_attribute() -> None:
     cfg = _Trainer()
     cfg.optimizer.lr = 0.02  # direct write on the dataclass instance
     assert cfg.optimizer.lr == 0.02
+
+
+# ---- switching a tagged-union variant --------------------------------------
+
+
+@dataclass
+class _Bucket:
+    bucket: str  # required
+
+
+class _Stores(ConfigModel):
+    primary: tagged_union(_Adam, _Bucket) = _Adam()  # type: ignore[valid-type]
+    backup: tagged_union(_SGD, _Bucket) = _SGD()  # type: ignore[valid-type]
+
+
+def test_switch_variant_by_tag() -> None:
+    cfg = _Trainer()
+    cfg.update_from_cli(["optimizer.name=sgd"])
+    assert isinstance(cfg.optimizer, _SGD)
+    assert cfg.optimizer.momentum == 0.9  # new variant starts from its defaults
+
+
+def test_switch_variant_with_a_field_in_either_order() -> None:
+    for args in (
+        ["optimizer.name=sgd", "momentum=0.5"],
+        ["momentum=0.5", "optimizer.name=sgd"],
+    ):
+        cfg = _Trainer()
+        cfg.update_from_cli(args)
+        assert isinstance(cfg.optimizer, _SGD)
+        assert cfg.optimizer.momentum == 0.5
+
+
+def test_switch_to_variant_with_required_field() -> None:
+    cfg = _Stores()
+    cfg.update_from_cli(["primary.name=bucket", "primary.bucket=b"])
+    assert isinstance(cfg.primary, _Bucket) and cfg.primary.bucket == "b"
+
+
+def test_switch_to_variant_missing_required_field_raises() -> None:
+    cfg = _Stores()
+    with pytest.raises(ConfigError, match="bucket"):
+        cfg.update_from_cli(["primary.name=bucket"])
+    assert isinstance(cfg.primary, _Adam)  # unchanged on failure
+
+
+def test_same_tag_keeps_current_values() -> None:
+    cfg = _Trainer()
+    cfg.update_from_cli(["lr=0.5"])
+    cfg.update_from_cli(["optimizer.name=adam"])
+    assert cfg.optimizer.lr == 0.5
+
+
+def test_unknown_tag_raises_validation_error() -> None:
+    cfg = _Trainer()
+    with pytest.raises(ConfigError, match="'rmsprop' is not a valid name"):
+        cfg.update_from_cli(["optimizer.name=rmsprop", "lr=0.1"])
+
+
+def test_tag_shortcut_and_ambiguity() -> None:
+    cfg = _Trainer()
+    cfg.update_from_cli(["name=sgd"])  # the only union, so the bare key is unique
+    assert isinstance(cfg.optimizer, _SGD)
+    stores = _Stores()
+    with pytest.raises(ValueError, match="Ambiguous override key 'name'"):
+        stores.update_from_cli(["name=bucket"])
+
+
+def test_switch_variant_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_OPTIMIZER__NAME", "sgd")
+    monkeypatch.setenv("APP_OPTIMIZER__MOMENTUM", "0.1")
+    cfg = _Trainer()
+    cfg.update_from_env("APP_")
+    assert isinstance(cfg.optimizer, _SGD) and cfg.optimizer.momentum == 0.1
+
+
+def test_switch_on_a_frozen_config_raises_frozen_error() -> None:
+    cfg = _Trainer().freeze()
+    with pytest.raises(FrozenConfigError):
+        cfg.update_from_args({"optimizer.name": "rmsprop"})

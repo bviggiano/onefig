@@ -1,0 +1,5 @@
+# Selects the MCAR variant of the missingness component by its tag.
+seed: 7
+missingness:
+  name: mcar
+  rate: 0.2

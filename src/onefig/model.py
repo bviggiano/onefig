@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import os
 import sys
 from argparse import Namespace
@@ -9,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from omegaconf import OmegaConf
-from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, PrivateAttr, TypeAdapter, model_validator
+from pydantic.fields import FieldInfo
 from typing_extensions import Self
 
 from onefig._cli import parse_overrides
@@ -28,16 +28,14 @@ from onefig._loader import load_yaml, resolve_path
 from onefig._overrides import apply_overrides, resolve_keys
 
 
-def _dump_value(value: Any) -> Any:
-    """Reduce a default value to plain data for flattening.
+def _dump_default(field: FieldInfo) -> Any:
+    """Reduce a field's default to plain data, as the field would serialize it.
 
-    Models and dataclasses become nested dicts; scalars pass through.
+    Dumping through the field's own type (not the value alone) applies its
+    serializers, e.g. a tagged union writing its variant's tag.
     """
-    if isinstance(value, BaseModel):
-        return value.model_dump()
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return dataclasses.asdict(value)
-    return value
+    value = field.get_default(call_default_factory=True)
+    return TypeAdapter(field.rebuild_annotation()).dump_python(value, warnings=False)
 
 
 def _flag_value(tokens: list[str], flag: str, default: str) -> str | None:
@@ -579,7 +577,7 @@ class ConfigModel(BaseModel):
         for name, field in type(self).model_fields.items():
             if field.is_required():
                 continue
-            defaults[name] = _dump_value(field.get_default(call_default_factory=True))
+            defaults[name] = _dump_default(field)
         return flatten(defaults)
 
     def diff_from_defaults(self) -> dict[str, tuple[Any, Any]]:

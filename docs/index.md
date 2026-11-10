@@ -75,6 +75,7 @@ YAML files support `${...}` interpolation and `extends:` composition; see
 - [Shell tab completion](completion.md): TAB completion of every overridable key.
 - [YAML composition](yaml.md): `extends:` and cross-file interpolation.
 - [Validation and freezing](validation.md): derived fields and immutable configs.
+- [Swappable components](unions.md): tagged unions that pick a variant config by its tag.
 - [Experiment tracking](experiments.md): snapshots, commit hashes, and hyperparameter logging.
 - [Diffing configs](diff.md): see exactly what changed between runs.
 - [Integrations](integrations/index.md): typed configs for external tools such as W&B sweeps.

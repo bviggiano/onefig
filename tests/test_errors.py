@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -12,7 +11,6 @@ from onefig import ConfigError, ConfigModel, format_validation_error, tagged_uni
 
 @dataclass
 class Adam:
-    name: Literal["adam"] = "adam"
     lr: float = 1e-3
 
     def __post_init__(self) -> None:
@@ -22,7 +20,6 @@ class Adam:
 
 @dataclass
 class SGD:
-    name: Literal["sgd"] = "sgd"
     lr: float = 1e-2
 
 
@@ -156,8 +153,24 @@ def test_unknown_tag_message() -> None:
     out = format_validation_error(
         _error({**_valid(), "optimizer": {"name": "rmsprop"}}), root=Cfg, color=False
     )
-    assert "'rmsprop' is not a valid name" in out
-    assert "adam" in out and "sgd" in out
+    assert "optimizer  ✗ 'rmsprop' is not a valid name; expected 'adam', 'sgd'" in out
+
+
+def test_missing_tag_message() -> None:
+    out = format_validation_error(
+        _error({**_valid(), "optimizer": {"lr": 0.1}}), root=Cfg, color=False
+    )
+    assert "optimizer  ✗ missing 'name'; expected one of 'adam', 'sgd'" in out
+
+
+def test_wrong_variant_field_folds_tag_and_names_leaf() -> None:
+    out = format_validation_error(
+        _error({**_valid(), "optimizer": {"name": "sgd", "momentum": 0.9}}),
+        root=Cfg,
+        color=False,
+    )
+    assert "optimizer (sgd)" in out
+    assert "momentum  ✗ unknown field" in out
 
 
 # ---- source locations ------------------------------------------------------
