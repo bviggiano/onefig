@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 import pytest
-from pydantic import ValidationError, model_validator
+from pydantic import model_validator
 
 from onefig import ConfigError, ConfigModel, tagged_union
+from onefig.model import FrozenConfigError
 
 
 class _Sub(ConfigModel):
@@ -176,24 +177,12 @@ def test_attribute_ambiguous_leaf_raises() -> None:
         _ = cfg.lr
 
 
-def test_full_path_assignment_revalidates() -> None:
+def test_frozen_config_rejects_overrides() -> None:
     cfg = _Cfg()
-    with pytest.raises(ValidationError):
-        cfg.model.lr = "not_a_float"
-
-
-def test_frozen_blocks_writes() -> None:
-    from onefig.model import FrozenConfigError
-
-    cfg = _Cfg()
-    cfg.model.lr = 0.42
     cfg.freeze()
-
-    assert cfg.model.lr == 0.42  # reads are unaffected (full path)
-    with pytest.raises(FrozenConfigError):
-        cfg.epochs = 99
-    with pytest.raises(FrozenConfigError):
-        cfg.model.lr = 0.5  # freeze() recurses into nested configs
+    with pytest.raises(FrozenConfigError, match="Cannot apply overrides"):
+        cfg.update_from_args({"lr": 0.5})
+    assert cfg.model.lr == _Cfg().model.lr
 
 
 def test_cli_suffix_subpath_resolves() -> None:

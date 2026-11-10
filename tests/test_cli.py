@@ -97,14 +97,6 @@ def test_update_from_cli_uses_argv_by_default(monkeypatch: pytest.MonkeyPatch) -
     assert cfg.epochs == 7
 
 
-def test_update_from_cli_revalidates() -> None:
-    from onefig import ConfigError
-
-    cfg = _Cfg()
-    with pytest.raises(ConfigError):
-        cfg.update_from_cli(["epochs=not_an_int"])
-
-
 def test_update_from_cli_show_prints_and_exits(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

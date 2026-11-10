@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 import pytest
@@ -166,9 +167,7 @@ def test_to_wandb_drops_unset_keys() -> None:
     assert "metric" not in out and "program" not in out  # None fields are omitted
 
 
-def test_load_reports_field_tree(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    from onefig import ConfigError
-
+def test_load_reports_field_tree(tmp_path: Path) -> None:
     sweep = tmp_path / "sweep.yaml"
     sweep.write_text(
         "method: bayes\nparameters:\n  lr:\n    value: 1\n"
