@@ -36,9 +36,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "black>=24.0",
-    "isort>=5.13",
-    "ruff>=0.5",
+    "ruff>=0.15",
     "mypy>=1.8",
 ]
 docs = ["mkdocs-material>=9.5"]
@@ -59,15 +57,7 @@ path = "src/onefig/__init__.py"
 packages = ["src/onefig"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/.github", "/assets", "/docs", "/hero.png"]
-
-[tool.black]
-line-length = 88
-target-version = ["py39"]
-
-[tool.isort]
-profile = "black"
-line_length = 88
+exclude = ["/.github", "/assets", "/docs"]
 
 [tool.ruff]
 line-length = 88
