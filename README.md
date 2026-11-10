@@ -13,8 +13,6 @@
 pip install onefig
 ```
 
-> OPTIONAL: One-time TAB completion setup: see [Shell tab completion](https://bviggiano.github.io/onefig/completion/).
-
 ![onefig](https://raw.githubusercontent.com/bviggiano/onefig/main/assets/hero.png)
 
 A simple, typed YAML config system for Python that tries to unite the best aspects of various config libraries into one API.
