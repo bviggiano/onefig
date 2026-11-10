@@ -14,6 +14,7 @@ repo root so the relative paths to `examples/configs/train.yaml` resolve.
 | [`07_freeze_and_snapshot.py`](07_freeze_and_snapshot.py) | `freeze()`, `save_yaml()`, `commit_hash`. |
 | [`08_diff.py`](08_diff.py) | `diff()` / `diff_from_defaults()` plus colored CLI visualization. |
 | [`09_extends.py`](09_extends.py) | YAML composition via top-level `extends:`. |
+| [`10_tagged_union.py`](10_tagged_union.py) | Swappable components via `tagged_union`: derived and explicit tags, switching variants from YAML and the CLI. |
 | [`notebook.ipynb`](notebook.ipynb) | A guided tour of the same APIs in notebook form. |
 
 Quick try:
@@ -28,4 +29,5 @@ MYAPP_EPOCHS=20 MYAPP_MODEL__NAME=bert python examples/06_env_overrides.py
 python examples/07_freeze_and_snapshot.py epochs=3 lr=0.01
 python examples/08_diff.py
 python examples/09_extends.py
+python examples/10_tagged_union.py missingness.name=informative --show
 ```

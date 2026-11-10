@@ -125,6 +125,10 @@ YAML files support `${...}` interpolation and `extends:` composition; see
   surface leaf-level changes as `{path: (old, new)}`, with a `MISSING`
   sentinel for cross-schema gaps. Handy for run logs and PR-style
   "what changed" output.
+- [**Swappable components**](https://bviggiano.github.io/onefig/unions/): `tagged_union(...)` lets a field hold any of several
+  variant configs, picked by a `name` tag in YAML, CLI or env. The tag is a class
+  attribute derived from the class name (`MCARConfig` → `mcar`), so variant fields
+  are only real settings.
 - [**Recursive freeze**](https://bviggiano.github.io/onefig/validation/#frozen-configs) — `cfg.freeze()` makes the whole tree immutable.
 - [**Tree display**](https://bviggiano.github.io/onefig/experiments/#print-the-config-as-a-tree) — `cfg.display()` prints the config as an ASCII tree.
 - [**Auto config name**](https://bviggiano.github.io/onefig/experiments/#name-runs-with-config_name) — `cfg.config_name` is set from the YAML filename and

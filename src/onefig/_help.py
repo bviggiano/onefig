@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 from onefig._overrides import resolve_keys
+from onefig._union import UnionInfo, union_info
 
 try:
     from types import UnionType  # Python 3.10+
@@ -92,20 +93,38 @@ def _collect_groups(model: BaseModel) -> list[tuple[str, list[FieldEntry]]]:
 
 
 def _walk(
-    model: BaseModel, prefix: str, groups: list[tuple[str, list[FieldEntry]]]
+    model: BaseModel,
+    prefix: str,
+    groups: list[tuple[str, list[FieldEntry]]],
+    lead: Sequence[FieldEntry] = (),
 ) -> None:
-    local: list[FieldEntry] = []
-    nested: list[tuple[str, BaseModel]] = []
+    local: list[FieldEntry] = list(lead)
+    nested: list[tuple[str, BaseModel, list[FieldEntry]]] = []
     for name, info in type(model).model_fields.items():
         full = f"{prefix}{name}"
         value = getattr(model, name)
         if isinstance(value, BaseModel):
-            nested.append((full, value))
+            union = union_info(info)
+            tag_entry = [] if union is None else [_tag_entry(full, info, union, value)]
+            nested.append((full, value, tag_entry))
         else:
             local.append((name, full, info, value))
     groups.append((prefix.rstrip("."), local))
-    for full, child in nested:
-        _walk(child, full + ".", groups)
+    for full, child, child_lead in nested:
+        _walk(child, full + ".", groups, child_lead)
+
+
+def _tag_entry(
+    full: str, info: FieldInfo, union: UnionInfo, value: BaseModel
+) -> FieldEntry:
+    """Synthesize the help entry for a tagged union's tag, which is not a field."""
+    default = union.tag_of(info.default) if info.default is not None else None
+    tag_info = FieldInfo(
+        annotation=Literal[tuple(union.variants)],  # type: ignore[arg-type]
+        default=default,
+        description=f"Selects the variant; switch with {full}.{union.tag}=<tag>.",
+    )
+    return (union.tag, f"{full}.{union.tag}", tag_info, union.tag_of(value))
 
 
 def _leaf_uniqueness(model: BaseModel) -> dict[str, bool]:

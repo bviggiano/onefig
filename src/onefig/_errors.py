@@ -7,11 +7,12 @@ import re
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, get_args
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
 from onefig._ansi import BOLD, DIM, RED, style
+from onefig._union import UnionInfo, union_info
 
 # Prefixes Pydantic prepends when a plain ``ValueError`` / ``AssertionError`` is
 # raised inside a validator; they add no information once the field is named.
@@ -172,14 +173,15 @@ def _humanize(err: Any) -> str:
             message = message[len(prefix) :]
     if kind == "missing":
         return "required field is missing"
-    if kind == "extra_forbidden":
+    if kind in ("extra_forbidden", "unexpected_keyword_argument"):
         return "unknown field"
     if kind == "union_tag_invalid":
         ctx = err.get("ctx", {})
         tag = ctx.get("tag", "?")
-        discriminator = str(ctx.get("discriminator", "tag")).strip("'")
         expected = ctx.get("expected_tags", "")
-        return f"{tag!r} is not a valid {discriminator}; expected {expected}"
+        return f"{tag!r} is not a valid {_discriminator(ctx)}; expected {expected}"
+    if kind == "union_tag_not_found":
+        return f"missing {_discriminator(err.get('ctx', {}))!r}"
     if kind.endswith("_parsing") or kind.endswith("_type"):
         want = kind.split("_", 1)[0]
         want = _TYPE_NAMES.get(want, want)
@@ -187,6 +189,12 @@ def _humanize(err: Any) -> str:
     if _is_scalar(given) and repr(given) not in message:
         return f"{message} (got {_short(given)})"
     return message
+
+
+def _discriminator(ctx: dict[str, Any]) -> str:
+    # tagged_union names its discriminator function after the tag key, and
+    # Pydantic reports it as "name()".
+    return str(ctx.get("discriminator", "tag")).strip("'").removesuffix("()")
 
 
 def _short(value: Any, limit: int = 40) -> str:
@@ -201,46 +209,19 @@ def _is_scalar(value: Any) -> bool:
 # ---- source-location resolution --------------------------------------------
 
 
-def _child_fields(cls: Any) -> dict[str, tuple[Any, Any]] | None:
-    """Map a class's field names to ``(annotation, discriminator)`` pairs."""
+def _child_fields(cls: Any) -> dict[str, tuple[Any, UnionInfo | None]] | None:
+    """Map a class's field names to ``(annotation, tagged-union info)`` pairs."""
     if isinstance(cls, type) and issubclass(cls, BaseModel):
-        return {n: (f.annotation, f.discriminator) for n, f in cls.model_fields.items()}
+        return {n: (f.annotation, union_info(f)) for n, f in cls.model_fields.items()}
     if dataclasses.is_dataclass(cls):
-        return {f.name: (f.type, None) for f in dataclasses.fields(cls)}
-    return None
-
-
-def _iter_variants(annotation: Any) -> Iterator[type]:
-    """Yield the concrete classes of a (possibly Annotated) union annotation."""
-    for arg in get_args(annotation):
-        if isinstance(arg, type):
-            yield arg
-        else:
-            yield from _iter_variants(arg)
-
-
-def _variant_for_tag(annotation: Any, tag: str, discriminator: str) -> type | None:
-    for variant in _iter_variants(annotation):
-        if _discriminator_default(variant, discriminator) == tag:
-            return variant
-    return None
-
-
-def _discriminator_default(variant: type, name: str) -> Any:
-    if issubclass(variant, BaseModel):
-        info = variant.model_fields.get(name)
-        return info.default if info is not None else None
-    if dataclasses.is_dataclass(variant):
-        for field in dataclasses.fields(variant):
-            if field.name == name:
-                return field.default
+        return {f.name: (f.type, union_info(f.type)) for f in dataclasses.fields(cls)}
     return None
 
 
 def _analyze(err: Any, root: type | None) -> tuple[list[str], str, str | None]:
     """Resolve one error into (display segments, message, source location).
 
-    A discriminated-union tag is folded into the preceding field's label
+    A tagged-union tag is folded into the preceding field's label
     (``optimizer (adamw)``) rather than shown as its own level, and when the
     message names a field of the offending model, that field is appended as the
     final segment so the branch reaches the exact leaf.
@@ -251,6 +232,11 @@ def _analyze(err: Any, root: type | None) -> tuple[list[str], str, str | None]:
 
     display, owner, field_name = _walk(root, err["loc"])
     location = _source(owner, field_name)
+    if err["type"] == "union_tag_not_found" and field_name is not None:
+        info = (_child_fields(owner) or {}).get(field_name, (None, None))[1]
+        if info is not None:
+            expected = ", ".join(repr(tag) for tag in info.variants)
+            message = f"{message}; expected one of {expected}"
 
     container = owner if field_name is None else _field_type(owner, field_name)
     fields = _child_fields(container)
@@ -268,7 +254,7 @@ def _analyze(err: Any, root: type | None) -> tuple[list[str], str, str | None]:
 def _walk(root: type, loc: tuple[Any, ...]) -> tuple[list[str], type, str | None]:
     """Walk ``loc`` from ``root``, returning display labels, owner, leaf field.
 
-    Nested models and dataclasses are descended; a discriminated-union tag is
+    Nested models and dataclasses are descended; a tagged-union tag is
     folded into the preceding label. Unknown segments (e.g. an extra field) stop
     the walk, leaving the enclosing class as the owner.
     """
@@ -276,13 +262,13 @@ def _walk(root: type, loc: tuple[Any, ...]) -> tuple[list[str], type, str | None
     current: Any = root
     owner: type = root
     field_name: str | None = None
-    pending_union: tuple[Any, str] | None = None
+    pending_union: UnionInfo | None = None
     for seg in loc:
         segment = str(seg)
         if pending_union is not None:
             if display:
                 display[-1] = f"{display[-1]} ({segment})"
-            variant = _variant_for_tag(pending_union[0], segment, pending_union[1])
+            variant = pending_union.variants.get(segment)
             if variant is not None:
                 current = owner = variant
                 field_name = None
@@ -293,9 +279,9 @@ def _walk(root: type, loc: tuple[Any, ...]) -> tuple[list[str], type, str | None
         if fields and segment in fields:
             owner = current
             field_name = segment
-            annotation, discriminator = fields[segment]
-            if discriminator:
-                pending_union = (annotation, discriminator)
+            annotation, info = fields[segment]
+            if info is not None:
+                pending_union = info
                 current = None
             elif isinstance(annotation, type):
                 current = annotation

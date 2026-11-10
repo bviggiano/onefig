@@ -4,7 +4,7 @@ from typing import Literal
 
 import pytest
 
-from onefig import ConfigModel
+from onefig import ConfigModel, tagged_union
 from onefig._completion import (
     completion_candidates,
     python_completion_script,
@@ -223,3 +223,21 @@ def test_python_wrapper_completion_script_method() -> None:
     cfg = _Cfg()
     out = cfg.python_wrapper_completion_script("bash")
     assert "_onefig_python_complete" in out
+
+
+class _AdamConfig(ConfigModel):
+    lr: float = 1e-3
+
+
+class _SGDConfig(ConfigModel):
+    momentum: float = 0.9
+
+
+class _UnionCfg(ConfigModel):
+    optimizer: tagged_union(_AdamConfig, _SGDConfig) = _AdamConfig()  # type: ignore[valid-type]
+
+
+def test_union_tag_path_is_offered() -> None:
+    out = completion_candidates(_UnionCfg())
+    assert "optimizer.name=" in out
+    assert "name=" in out  # unique here, so the bare shortcut is offered

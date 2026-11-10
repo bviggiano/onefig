@@ -42,6 +42,16 @@ cfg.completion_candidates()                  # list of completion tokens
 cfg.python_wrapper_completion_script("bash") # install snippet for `python <script>.py`
 ```
 
+Tagged unions (see [Swappable components](unions.md)):
+
+```python
+from onefig import tagged_union
+
+Store = tagged_union(LocalConfig, S3Config)             # tag key "name" by default
+Store = tagged_union(LocalConfig, S3Config, tag="kind") # custom tag key
+LocalConfig.name                                         # "local": derived, or an explicit ClassVar
+```
+
 The library installs a console command:
 
 ```bash

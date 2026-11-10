@@ -6,7 +6,7 @@ from typing import Literal, Optional
 import pytest
 from pydantic import Field
 
-from onefig import ConfigModel
+from onefig import ConfigModel, tagged_union
 from onefig._help import format_help
 
 
@@ -292,3 +292,36 @@ def test_help_flag_does_not_consume_unknown_overrides_when_help_passed() -> None
     cfg = _Cfg()
     # 'nope' would normally raise; --help should bypass that.
     cfg.update_from_cli(["nope=1", "--help"], exit_on_help=False)
+
+
+# ---- tagged unions ---------------------------------------------------------
+
+
+class _InformativeConfig(ConfigModel):
+    severity_slope: float = 0.8
+    """How strongly missingness rises with severity."""
+
+
+class _MCARConfig(ConfigModel):
+    rate: float = 0.1
+
+
+class _Site(ConfigModel):
+    missingness: tagged_union(_InformativeConfig, _MCARConfig) = _InformativeConfig()  # type: ignore[valid-type]
+
+
+def test_union_panel_lists_variant_choices() -> None:
+    out = format_help(_Site())
+    assert "╭─ missingness " in out
+    assert "name : Literal['informative', 'mcar'] = 'informative'" in out
+    assert "missingness.name=<tag>" in out
+    assert "severity_slope : float = 0.8" in out
+
+
+def test_union_panel_follows_the_current_variant() -> None:
+    cfg = _Site.from_dict({"missingness": {"name": "mcar"}})
+    out = format_help(cfg)
+    assert "name : Literal['informative', 'mcar'] = 'mcar'" in out
+    assert "(default: 'informative')" in " ".join(out.replace("│", " ").split())
+    assert "rate : float = 0.1" in out
+    assert "severity_slope" not in out
