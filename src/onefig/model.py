@@ -5,7 +5,7 @@ import sys
 from argparse import Namespace
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel, ConfigDict, PrivateAttr, TypeAdapter, model_validator
@@ -35,10 +35,7 @@ def _dump_default(field: FieldInfo) -> Any:
     serializers, e.g. a tagged union writing its variant's tag.
     """
     value = field.get_default(call_default_factory=True)
-    annotation = field.annotation
-    if field.metadata:
-        annotation = Annotated[(annotation, *field.metadata)]  # type: ignore[assignment]
-    return TypeAdapter(annotation).dump_python(value, warnings=False)
+    return TypeAdapter(field.rebuild_annotation()).dump_python(value, warnings=False)
 
 
 def _flag_value(tokens: list[str], flag: str, default: str) -> str | None:
