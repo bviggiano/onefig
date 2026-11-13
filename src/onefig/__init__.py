@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from onefig._diff import MISSING
+from onefig._docs import FieldTable, describe_fields, field_docs
 from onefig._errors import ConfigError, format_validation_error
 from onefig._format import flatten, format_tree, unflatten
 from onefig._traits import Field, FieldTrait, FoundTrait
@@ -11,9 +12,12 @@ __all__ = [
     "ConfigError",
     "ConfigModel",
     "Field",
+    "FieldTable",
     "FieldTrait",
     "MISSING",
     "FoundTrait",
+    "describe_fields",
+    "field_docs",
     "flatten",
     "format_tree",
     "format_validation_error",

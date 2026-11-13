@@ -23,6 +23,10 @@ cfg.commit_hash                              # str | None — git HEAD captured 
 cfg.find(Range)                              # [FoundTrait(path, trait, value), ...]
 cfg.replace({"cohorts.0.size": 900})         # new validated copy
 
+# Field docs (see Documenting fields)
+field_docs(MyCfg)                            # {field: docstring}; dataclasses too
+describe_fields(cfg_or_dataclass)            # Markdown table of fields, types, descriptions
+
 # Serialization
 cfg.to_dict()                                # nested dict
 cfg.to_flat_dict()                           # {"model.lr": 0.001, ...}

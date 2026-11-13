@@ -15,6 +15,7 @@ nav:
       - Validation and freezing: validation.md
       - Swappable components: unions.md
       - Field traits: traits.md
+      - Documenting fields: fields.md
       - Experiment tracking: experiments.md
       - Diffing configs: diff.md
   - Integrations:
