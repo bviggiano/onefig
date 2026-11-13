@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from typing import Any
 
 from onefig._ansi import DIM, GREEN, RED, style
@@ -54,6 +55,7 @@ def format_diff(
     *,
     color: bool | None = None,
     empty_message: str = "(no changes)",
+    show: Callable[[str, Any], Any] | None = None,
 ) -> str:
     """Render a diff dict as an aligned ``old → new`` table.
 
@@ -68,12 +70,16 @@ def format_diff(
         color: ``True`` / ``False`` to force ANSI on or off. ``None``
             (default) auto-detects via ``sys.stdout.isatty()``.
         empty_message: Text to return when ``diff`` is empty.
+        show: ``show(path, value)`` renders a value before it is printed, as
+            field traits ask; values are printed as they are when ``None``.
 
     Returns:
         A multi-line string ready to print.
     """
     if not diff:
         return empty_message
+    if show is not None:
+        diff = {k: (show(k, old), show(k, new)) for k, (old, new) in diff.items()}
 
     use_color = sys.stdout.isatty() if color is None else color
 
@@ -98,6 +104,7 @@ def format_against_defaults(
     *,
     color: bool | None = None,
     empty_message: str = "(empty config)",
+    show: Callable[[str, Any], Any] | None = None,
 ) -> str:
     """Render a config's full state with override highlights.
 
@@ -115,6 +122,8 @@ def format_against_defaults(
         color: ``True`` / ``False`` to force ANSI on or off. ``None``
             (default) auto-detects via ``sys.stdout.isatty()``.
         empty_message: Text to return when ``current`` is empty.
+        show: ``show(path, value)`` renders a value before it is printed, as
+            field traits ask; values are compared before they are rendered.
 
     Returns:
         A multi-line string ready to print.
@@ -122,13 +131,16 @@ def format_against_defaults(
     if not current:
         return empty_message
 
+    def shown(key: str, value: Any) -> Any:
+        return value if show is None else show(key, value)
+
     use_color = sys.stdout.isatty() if color is None else color
 
     keys = list(current.keys())
     key_width = max(len(k) for k in keys)
 
     overridden_olds = [
-        _format_value(defaults[k])
+        _format_value(shown(k, defaults[k]))
         for k in keys
         if k in defaults and defaults[k] != current[k]
     ]
@@ -138,14 +150,14 @@ def format_against_defaults(
     for key in keys:
         key_col = key.ljust(key_width)
         cur_val = current[key]
-        cur_repr = repr(cur_val)
+        cur_repr = repr(shown(key, cur_val))
         if key in defaults and defaults[key] == cur_val:
             # Unchanged — single green value, no arrow.
             value_styled = style(cur_repr, GREEN, enabled=use_color)
             lines.append(f"  {key_col}  {value_styled}")
         else:
             # Overridden — default in red, current in green.
-            default_repr = _format_value(defaults.get(key, MISSING))
+            default_repr = _format_value(shown(key, defaults.get(key, MISSING)))
             old_padded = default_repr.ljust(old_width)
             old_styled = style(old_padded, RED, enabled=use_color)
             new_styled = style(cur_repr, GREEN, enabled=use_color)

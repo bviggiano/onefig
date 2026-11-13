@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import functools
 import os
 import sys
 from argparse import Namespace
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Generic, TypeVar, cast
 
 from omegaconf import OmegaConf
-from pydantic import BaseModel, ConfigDict, PrivateAttr, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PrivateAttr,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 from pydantic.fields import FieldInfo
-from typing_extensions import Self
+from typing_extensions import Concatenate, ParamSpec, Self
 
 from onefig._cli import parse_overrides
 from onefig._completion import (
@@ -18,15 +26,22 @@ from onefig._completion import (
     python_completion_script,
     shell_script,
 )
-from onefig._diff import compute_diff, format_against_defaults, format_diff
+from onefig._diff import MISSING, compute_diff, format_against_defaults, format_diff
 from onefig._env import parse_env
 from onefig._errors import FROZEN_HINT, FrozenConfigError, clean_validation_errors
 from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._markers import M, Marked, find_markers, with_updates
 from onefig._overrides import apply_overrides, resolve_keys
+from onefig._traits import (
+    FoundTrait,
+    Shown,
+    T,
+    find_traits,
+    value_shower,
+    with_updates,
+)
 
 
 def _dump_default(field: FieldInfo) -> Any:
@@ -66,6 +81,36 @@ def _leaf_shortcut_hint(model: BaseModel, name: str) -> str:
     return f"{name!r} is ambiguous in {who} (matches {matches}); use the full path."
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+class _class_or_instance(Generic[P, R]):  # noqa: N801 - used as a decorator
+    """A method that runs on the instance it is called on, or, called on the class,
+    on the class's defaults.
+
+    A class with a required field cannot be built from defaults; it is then
+    constructed without validation, with :data:`onefig.MISSING` in its required
+    fields.
+    """
+
+    def __init__(self, func: Callable[Concatenate[Any, P], R]) -> None:
+        self.func = func
+        self.__doc__ = func.__doc__
+
+    def __get__(self, obj: Any, owner: type[ConfigModel]) -> Callable[P, R]:
+        target = obj if obj is not None else _defaults_of(owner)
+        return cast(Callable[P, R], functools.partial(self.func, target))
+
+
+def _defaults_of(cls: type[ConfigModel]) -> ConfigModel:
+    try:
+        return cls()
+    except ValidationError:  # a required field: show it as MISSING
+        required = [name for name, f in cls.model_fields.items() if f.is_required()]
+        return cls.model_construct(**dict.fromkeys(required, MISSING))
+
+
 class ConfigModel(BaseModel):
     """Base class for typed onefig configurations.
 
@@ -78,6 +123,7 @@ class ConfigModel(BaseModel):
         validate_assignment=True,
         extra="forbid",
         use_attribute_docstrings=True,
+        ignored_types=(_class_or_instance,),
     )
 
     _frozen: bool = PrivateAttr(default=False)
@@ -399,13 +445,16 @@ class ConfigModel(BaseModel):
             if exit_on_show:
                 sys.exit(0)
 
+    @_class_or_instance
     def format_help(self, title: str | None = None) -> str:
         """Render this config's schema as a help string.
 
         Lists every overridable field with its dotted path, type, default,
         current value, and docstring (if any). Useful for argparse-driven
         scripts that want to surface the same information as the
-        ``--help`` flag handled by :meth:`update_from_cli`.
+        ``--help`` flag handled by :meth:`update_from_cli`. Call it on an
+        instance for its current values, or on the class (``MyConfig.format_help()``)
+        for its defaults; a required field then shows as ``<required>``.
 
         Args:
             title: Header for the output. Defaults to
@@ -416,8 +465,9 @@ class ConfigModel(BaseModel):
         """
         return format_help(self, title=title or self._config_name)
 
+    @_class_or_instance
     def print_help(self, title: str | None = None) -> None:
-        """Print :meth:`format_help` to stdout."""
+        """Print :meth:`format_help` to stdout; also works on the class."""
         print(self.format_help(title=title))
 
     def completion_candidates(self) -> list[str]:
@@ -504,22 +554,22 @@ class ConfigModel(BaseModel):
         """
         return flatten(self.model_dump())
 
-    def find(self, kind: type[M]) -> list[Marked[M]]:
-        """Return every field in this config's tree that holds a ``kind`` marker.
+    def find(self, kind: type[T]) -> list[FoundTrait[T]]:
+        """Return every field in this config's tree that holds a ``kind`` trait.
 
-        Markers are attached with :func:`onefig.Field`. The walk descends into
+        Traits are attached with :func:`onefig.Field`. The walk descends into
         nested configs, including those held by tagged unions, lists, tuples and
         dicts, in declaration order.
 
         Args:
-            kind: A :class:`onefig.FieldMarker` subclass; its subclasses match too.
+            kind: A :class:`onefig.FieldTrait` subclass; its subclasses match too.
 
         Returns:
-            One :class:`onefig.Marked` per matching marker, with the field's full
-            dotted path (list entries indexed, ``cohorts.0.size``), the marker and
+            One :class:`onefig.FoundTrait` per matching trait, with the field's full
+            dotted path (list entries indexed, ``cohorts.0.size``), the trait and
             the field's current value.
         """
-        return find_markers(self, kind)
+        return find_traits(self, kind)
 
     def replace(self, updates: Mapping[str, Any]) -> Self:
         """Return a new config with ``updates`` applied, validated as a whole.
@@ -659,7 +709,7 @@ class ConfigModel(BaseModel):
         Returns:
             A multi-line string ready to print.
         """
-        return format_diff(self.diff(other), color=color)
+        return format_diff(self.diff(other), color=color, show=value_shower(self))
 
     def print_diff(
         self,
@@ -688,6 +738,7 @@ class ConfigModel(BaseModel):
             self.to_flat_dict(),
             self._defaults_flat_dict(),
             color=color,
+            show=value_shower(self),
         )
 
     def print_diff_from_defaults(self, *, color: bool | None = None) -> None:
@@ -760,7 +811,13 @@ class ConfigModel(BaseModel):
                 display content dynamically rather than via :meth:`display_sections`.
         """
         title = name or self._config_name or "Config"
-        print(format_tree(self.model_dump(), name=title))
+        show = value_shower(self)
+        rendered = {
+            path: shown
+            for path, value in self.to_flat_dict().items()
+            if isinstance(shown := show(path, value), Shown)
+        }
+        print(format_tree(with_updates(self.model_dump(), rendered), name=title))
         for section in (*self.display_sections(), *sections):
             print(f"\n{section}")
 
