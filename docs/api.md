@@ -40,6 +40,7 @@ cfg.format_diff_from_defaults()              # string form
 cfg.display(name="MyRun")                    # print ASCII tree to stdout
 cfg.print_help()                             # schema-aware help (also via --help)
 cfg.format_help()                            # same, returned as a string
+MyCfg.print_help()                           # on the class: the defaults, <required> unset
 
 # Shell completion
 cfg.completion_candidates()                  # list of completion tokens

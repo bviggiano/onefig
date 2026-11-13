@@ -145,3 +145,74 @@ def test_help_shows_what_a_marker_describes() -> None:
     out = format_help(World())
     assert "Drawn from 1 to 8." in out
     assert "Drawn from 0 to 1." in out  # inside the tagged union
+
+
+# ---- how marked fields are printed ----------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class Drawn(FieldMarker):
+    """Shows an unset value as drawn, and the type without ``None``."""
+
+    low: int
+    high: int
+
+    def format_value(self, value: object) -> str | None:
+        return f"<drawn {self.low}-{self.high}>" if value is None else None
+
+    def format_type(self, annotation: object) -> str:
+        return "int (drawn)"
+
+
+@dataclasses.dataclass(frozen=True)
+class Silent(FieldMarker):
+    """Leaves every rendering to onefig, or to the next marker."""
+
+
+class Study(ConfigModel):
+    size: Optional[int] = Field(None, Silent(), Drawn(10, 99))  # noqa: UP045
+
+
+class Run(ConfigModel):
+    name: str
+    size: Optional[int] = Field(None, Drawn(1, 8))  # noqa: UP045
+    studies: list[Study] = [Study(), Study(size=50)]
+
+
+def test_help_shows_a_marked_field_as_its_markers_render_it() -> None:
+    out = Run(name="r", size=3).format_help()
+    assert "size : int (drawn) = 3" in out
+    assert "(default: <drawn 1-8>)" in out
+
+
+def test_the_first_marker_that_renders_wins() -> None:
+    assert "<drawn 10-99>" in Study().format_help()
+
+
+def test_help_on_the_class_shows_defaults_and_required_fields() -> None:
+    out = Run.format_help()
+    assert "name : str = <required>" in out
+    assert "size : int (drawn) = <drawn 1-8>" in out
+    assert Study.format_help() == Study().format_help()
+
+
+def test_display_renders_marked_leaves_in_nested_lists(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    Run(name="r").display()
+    out = capsys.readouterr().out
+    assert "size: <drawn 1-8>" in out
+    assert "size: <drawn 10-99>" in out  # studies.0.size
+    assert "size: 50" in out  # set, so shown as is
+
+
+def test_diff_from_defaults_compares_values_before_rendering_them() -> None:
+    lines = Run(name="r", size=3).format_diff_from_defaults(color=False).splitlines()
+    assert any(line.split() == ["size", "<drawn", "1-8>", "→", "3"] for line in lines)
+    # Unchanged and unset: shown once as drawn, not as an override.
+    assert any(line.split() == ["studies.0.size", "<drawn", "10-99>"] for line in lines)
+
+
+def test_diff_renders_both_sides() -> None:
+    out = Run(name="r").format_diff(Run(name="r", size=4), color=False)
+    assert out.split() == ["size", "<drawn", "1-8>", "→", "4"]

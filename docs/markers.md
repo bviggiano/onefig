@@ -26,7 +26,8 @@ class Range(FieldMarker):
 ```
 
 `describe()` is optional. Its text is shown after the field's description in
-`--help`; returning `None` (the default) shows nothing.
+`--help`; returning `None` (the default) shows nothing. Two more hooks control how
+marked fields are printed; see [How marked fields are printed](#how-marked-fields-are-printed).
 
 ## Attach it
 
@@ -98,3 +99,54 @@ resolved = cfg.replace(drawn).freeze()
 
 An unknown path raises `ValueError`; a value that fails validation raises
 `ConfigError`.
+
+## How marked fields are printed
+
+A marker decides how its fields look wherever a config is printed, through three
+optional hooks. The hooks live on the marker class, so a config class only declares
+its fields, and a helper that builds fields with a marker (a `KnobField(...)` that
+returns `onefig.Field(None, Knob(...))`, say) gets its printing from that marker.
+
+| Hook | Used for | Shown in |
+|---|---|---|
+| `describe()` | a note after the field's description | `--help` |
+| `format_value(value)` | the field's value | the current and default value in `--help`, the field's leaf in `display()` and `--show`, both sides of `format_diff` and `format_diff_from_defaults` |
+| `format_type(annotation)` | the field's type | `--help` |
+
+Each returns a string, or `None` to keep onefig's own rendering, so a marker
+overrides only what it needs. When a field has several markers, the first that
+returns text wins; every `describe()` text is shown. Values are compared before
+they are rendered, so a diff never reports a field as changed because of how it is
+shown.
+
+```python
+@dataclasses.dataclass(frozen=True)
+class Range(FieldMarker):
+    low: int
+    high: int
+
+    def describe(self) -> str:
+        return f"Drawn from {self.low} to {self.high} when unset."
+
+    def format_value(self, value: object) -> str | None:
+        return f"<drawn {self.low}-{self.high}>" if value is None else None
+
+    def format_type(self, annotation: object) -> str:
+        return "int"
+
+
+class WorldConfig(ConfigModel):
+    diseases: Optional[int] = Field(None, Range(1, 8))
+    """Diseases in the world."""
+
+
+WorldConfig.print_help()
+```
+
+```text
+│   diseases : int = <drawn 1-8>                                                       │
+│       Diseases in the world. Drawn from 1 to 8 when unset.                           │
+```
+
+`print_help()` and `format_help()` also work on the class, as above: they show its
+defaults, and a required field as `<required>`.

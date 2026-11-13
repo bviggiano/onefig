@@ -1,20 +1,24 @@
 """Field markers: typed objects a project attaches to config fields.
 
 onefig does not interpret a marker. It carries the marker on the field, finds every
-field holding a given kind of marker with :meth:`ConfigModel.find`, and shows the
-marker's :meth:`FieldMarker.describe` text in ``--help``. What a marker means, such
-as a range to draw the field's value from, is up to the project that defines it.
+field holding a given kind of marker with :meth:`ConfigModel.find`, and asks the
+marker how the field should look wherever a config is printed. What a marker means,
+such as a range to draw the field's value from, is up to the project that defines
+it, and so is how its fields are shown: that lives on the marker class, never on the
+configs that use it.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from pydantic.fields import FieldInfo
+
+from onefig._diff import MISSING
 
 
 class FieldMarker:
@@ -22,10 +26,25 @@ class FieldMarker:
 
     Subclasses are usually frozen dataclasses. A marker can also be attached
     through ``Annotated[int, MyMarker(...)]``.
+
+    Three hooks set how a marked field is printed. Each returns ``None`` to leave
+    onefig's own rendering, so a marker overrides only what it needs; when a field
+    has several markers, the first that returns text wins (``describe`` texts are
+    all shown).
     """
 
     def describe(self) -> str | None:
-        """Text shown with the field in ``--help``; ``None`` shows nothing."""
+        """Text shown after the field's description in ``--help``."""
+        return None
+
+    def format_value(self, value: Any) -> str | None:
+        """How a value of the field is shown: the current and default values in
+        ``--help``, the field's leaf in :meth:`ConfigModel.display`, and both sides
+        of the diff printers."""
+        return None
+
+    def format_type(self, annotation: Any) -> str | None:
+        """How the field's type is shown in ``--help``."""
         return None
 
 
@@ -136,3 +155,44 @@ def _key(container: Any, segment: str, path: str) -> Any:
     elif isinstance(container, dict) and segment in container:
         return segment
     raise ValueError(f"{path!r} is not a path in this config.")
+
+
+class Shown:
+    """A value rendered by a marker: its ``repr`` is the marker's text."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def __repr__(self) -> str:
+        return self.text
+
+
+def marker_text(markers: list[FieldMarker], hook: str, arg: Any) -> str | None:
+    """The first text a marker's ``hook`` returns for ``arg``, or ``None``."""
+    for marker in markers:
+        text = getattr(marker, hook)(arg)
+        if text is not None:
+            return str(text)
+    return None
+
+
+def value_shower(model: BaseModel) -> Callable[[str, Any], Any]:
+    """Return ``show(path, value)``: ``value`` as the markers on ``model``'s field at
+    ``path`` render it, or ``value`` itself.
+
+    A rendered value comes back as :class:`Shown`, whose ``repr`` is the marker's
+    text, so it drops into any printer that writes ``repr(value)``. Paths are full
+    dotted paths, as :meth:`ConfigModel.to_flat_dict` gives; :data:`MISSING` and
+    paths that are not marked fields are left as they are.
+    """
+    markers: dict[str, list[FieldMarker]] = {}
+    for found in find_markers(model, FieldMarker):
+        markers.setdefault(found.path, []).append(found.marker)
+
+    def show(path: str, value: Any) -> Any:
+        if path not in markers or value is MISSING:
+            return value
+        text = marker_text(markers[path], "format_value", value)
+        return value if text is None else Shown(text)
+
+    return show
