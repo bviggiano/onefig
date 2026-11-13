@@ -14,6 +14,7 @@ nav:
       - YAML composition: yaml.md
       - Validation and freezing: validation.md
       - Swappable components: unions.md
+      - Field markers: markers.md
       - Experiment tracking: experiments.md
       - Diffing configs: diff.md
   - Integrations:

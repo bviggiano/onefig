@@ -25,6 +25,7 @@ from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
+from onefig._markers import M, Marked, find_markers, set_path
 from onefig._overrides import apply_overrides, resolve_keys
 
 
@@ -502,6 +503,52 @@ class ConfigModel(BaseModel):
             indexed (``"tags.0"``, ``"layers.0.size"``).
         """
         return flatten(self.model_dump())
+
+    def find(self, kind: type[M]) -> list[Marked[M]]:
+        """Return every field in this config's tree that holds a ``kind`` marker.
+
+        Markers are attached with :func:`onefig.Field`. The walk descends into
+        nested configs, including those held by tagged unions, lists, tuples and
+        dicts, in declaration order.
+
+        Args:
+            kind: A :class:`onefig.FieldMarker` subclass; its subclasses match too.
+
+        Returns:
+            One :class:`onefig.Marked` per matching marker, with the field's full
+            dotted path (list entries indexed, ``cohorts.0.size``), the marker and
+            the field's current value.
+        """
+        return find_markers(self, kind)
+
+    def replace(self, updates: Mapping[str, Any]) -> Self:
+        """Return a new config with ``updates`` applied, validated as a whole.
+
+        Unlike :meth:`update_from_args`, this leaves ``self`` unchanged (so it works
+        on a frozen config) and takes only full dotted paths, the ones
+        :meth:`find` and :meth:`to_flat_dict` give, including list indices
+        (``cohorts.0.size``). Every update is applied before validation, so
+        cross-field validators see the final config. The copy keeps
+        :attr:`config_name` and :attr:`commit_hash` and is not frozen.
+
+        Args:
+            updates: Mapping of full dotted paths to new values.
+
+        Returns:
+            A validated instance of ``type(self)``.
+
+        Raises:
+            ValueError: If a path is not a path of this config.
+            ConfigError: If the updated config fails validation.
+        """
+        data = self.model_dump()
+        for path, value in updates.items():
+            set_path(data, path, value)
+        with clean_validation_errors(type(self), name=self._config_name):
+            copy = type(self).model_validate(data)
+        object.__setattr__(copy, "_config_name", self._config_name)
+        object.__setattr__(copy, "_commit_hash", self._commit_hash)
+        return copy
 
     def codename(self, *, exclude: Iterable[str] = (), **kwargs: Any) -> str:
         """Deterministic, memorable code name for this config.
