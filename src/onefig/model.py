@@ -25,7 +25,7 @@ from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._markers import M, Marked, find_markers, set_path
+from onefig._markers import M, Marked, find_markers, with_updates
 from onefig._overrides import apply_overrides, resolve_keys
 
 
@@ -541,9 +541,7 @@ class ConfigModel(BaseModel):
             ValueError: If a path is not a path of this config.
             ConfigError: If the updated config fails validation.
         """
-        data = self.model_dump()
-        for path, value in updates.items():
-            set_path(data, path, value)
+        data = with_updates(self.model_dump(), updates)
         with clean_validation_errors(type(self), name=self._config_name):
             copy = type(self).model_validate(data)
         object.__setattr__(copy, "_config_name", self._config_name)

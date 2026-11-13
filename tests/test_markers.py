@@ -48,6 +48,7 @@ class World(ConfigModel):
     weight: float = Field(1.0, Unit("kg"), ge=0)
     cohorts: list[Cohort] = [Cohort(), Cohort(size=900)]
     by_site: dict[str, Cohort] = {"north": Cohort()}
+    waves: tuple[Cohort, ...] = (Cohort(),)
     store: tagged_union(Local, Remote) = Local()  # type: ignore[valid-type]
 
     @model_validator(mode="after")
@@ -64,6 +65,7 @@ def test_find_returns_every_marker_of_a_kind_with_its_path_and_value() -> None:
         ("cohorts.0.size", None),
         ("cohorts.1.size", 900),
         ("by_site.north.size", None),
+        ("waves.0.size", None),
         ("store.rate", 0.1),
     ]
     assert isinstance(found[1].marker, LogRange)
@@ -80,6 +82,7 @@ def test_find_matches_only_the_kind_asked_for() -> None:
         "cohorts.0.size",
         "cohorts.1.size",
         "by_site.north.size",
+        "waves.0.size",
     ]
 
 
@@ -104,8 +107,8 @@ def test_replace_accepts_the_paths_find_returns() -> None:
     world = World()
     drawn = {m.path: 7 for m in world.find(Range) if m.value is None}
     replaced = world.replace(drawn)
-    assert [m.value for m in replaced.find(LogRange)] == [7, 900, 7]
-    assert [m.value for m in world.find(LogRange)] == [None, 900, None]
+    assert [m.value for m in replaced.find(LogRange)] == [7, 900, 7, 7]
+    assert [m.value for m in world.find(LogRange)] == [None, 900, None, None]
 
 
 def test_replace_works_on_a_frozen_config_and_returns_an_unfrozen_copy() -> None:
@@ -130,7 +133,9 @@ def test_replace_validates_all_updates_together() -> None:
         world.replace({"diseases": 7, "weight": 0.5})
 
 
-@pytest.mark.parametrize("path", ["missing", "cohorts.5.size", "cohorts.x", "weight.x"])
+@pytest.mark.parametrize(
+    "path", ["missing", "cohorts.5.size", "cohorts.x", "waves.1.size", "weight.x"]
+)
 def test_replace_rejects_paths_outside_the_config(path: str) -> None:
     with pytest.raises(ValueError, match="is not a path in this config"):
         World().replace({path: 1})

@@ -101,20 +101,32 @@ def _nested_models(value: Any, path: str) -> Iterator[tuple[str, BaseModel]]:
             yield from _nested_models(item, f"{path}.{key}")
 
 
-def set_path(data: dict[str, Any], path: str, value: Any) -> None:
-    """Set ``value`` at a full dotted ``path`` in a dumped config.
+def with_updates(data: dict[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a dumped config with ``updates`` set at their full dotted paths.
 
-    A segment indexes a list when the container at that point is a list, and is a
-    key otherwise.
+    Tuples in ``data`` come back as lists, so their entries can be set; Pydantic
+    validates a list into a tuple field. A segment indexes a list when the container
+    at that point is a list, and is a key otherwise.
 
     Raises:
-        ValueError: If ``path`` does not name a field of the dumped config.
+        ValueError: If a path does not name a field of the dumped config.
     """
-    *parents, last = path.split(".")
-    cursor: Any = data
-    for segment in parents:
-        cursor = cursor[_key(cursor, segment, path)]
-    cursor[_key(cursor, last, path)] = value
+    thawed: dict[str, Any] = _thaw(data)
+    for path, value in updates.items():
+        *parents, last = path.split(".")
+        cursor: Any = thawed
+        for segment in parents:
+            cursor = cursor[_key(cursor, segment, path)]
+        cursor[_key(cursor, last, path)] = value
+    return thawed
+
+
+def _thaw(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _thaw(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_thaw(item) for item in value]
+    return value
 
 
 def _key(container: Any, segment: str, path: str) -> Any:
