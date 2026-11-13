@@ -19,6 +19,10 @@ cfg.is_frozen                                # bool
 cfg.config_name                              # str | None — settable while unfrozen
 cfg.commit_hash                              # str | None — git HEAD captured at construction
 
+# Field markers (see Field markers guide)
+cfg.find(Range)                              # [Marked(path, marker, value), ...]
+cfg.replace({"cohorts.0.size": 900})         # new validated copy
+
 # Serialization
 cfg.to_dict()                                # nested dict
 cfg.to_flat_dict()                           # {"model.lr": 0.001, ...}
@@ -50,6 +54,15 @@ from onefig import tagged_union
 Store = tagged_union(LocalConfig, S3Config)             # tag key "name" by default
 Store = tagged_union(LocalConfig, S3Config, tag="kind") # custom tag key
 LocalConfig.name                                         # "local": derived, or an explicit ClassVar
+```
+
+Field markers (see [Field markers](markers.md)):
+
+```python
+from onefig import Field, FieldMarker
+
+class Range(FieldMarker): ...                            # your own marker type
+size: int = Field(100, Range(1, 500), ge=1)              # pydantic Field plus markers
 ```
 
 The library installs a console command:

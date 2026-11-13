@@ -9,6 +9,7 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
+from onefig._markers import markers_of
 from onefig._overrides import resolve_keys
 from onefig._union import UnionInfo, union_info
 
@@ -148,6 +149,7 @@ def _render_field_lines(
         default_str = _format_default(info)
 
         label = name if leaf_unique.get(name, False) else full
+        notes = [info.description, *(m.describe() for m in markers_of(info))]
 
         out.extend(
             _render_entry(
@@ -155,7 +157,7 @@ def _render_field_lines(
                 type_str,
                 current_str,
                 default_str,
-                info.description,
+                " ".join(n for n in notes if n) or None,
                 body_width,
             )
         )
