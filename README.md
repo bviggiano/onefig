@@ -131,6 +131,8 @@ YAML files support `${...}` interpolation and `extends:` composition; see
   are only real settings.
 - [**Field traits**](https://bviggiano.github.io/onefig/traits/): attach your own typed objects to fields with
   `Field(default, *traits)`, find them anywhere in the tree with `cfg.find(Kind)`, and fill values in with `cfg.replace({...})`.
+- [**Field docs**](https://bviggiano.github.io/onefig/fields/): `field_docs(cls)` reads every field's docstring, for configs and
+  dataclasses, and `describe_fields(obj)` shows them as a Markdown table in a notebook.
 - [**Recursive freeze**](https://bviggiano.github.io/onefig/validation/#frozen-configs) — `cfg.freeze()` makes the whole tree immutable.
 - [**Tree display**](https://bviggiano.github.io/onefig/experiments/#print-the-config-as-a-tree) — `cfg.display()` prints the config as an ASCII tree.
 - [**Auto config name**](https://bviggiano.github.io/onefig/experiments/#name-runs-with-config_name) — `cfg.config_name` is set from the YAML filename and
