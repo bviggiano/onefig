@@ -33,15 +33,15 @@ from onefig._format import flatten, format_tree, unflatten
 from onefig._git import get_commit_hash
 from onefig._help import format_help
 from onefig._loader import load_yaml, resolve_path
-from onefig._markers import (
-    M,
-    Marked,
+from onefig._overrides import apply_overrides, resolve_keys
+from onefig._traits import (
+    FoundTrait,
     Shown,
-    find_markers,
+    T,
+    find_traits,
     value_shower,
     with_updates,
 )
-from onefig._overrides import apply_overrides, resolve_keys
 
 
 def _dump_default(field: FieldInfo) -> Any:
@@ -554,22 +554,22 @@ class ConfigModel(BaseModel):
         """
         return flatten(self.model_dump())
 
-    def find(self, kind: type[M]) -> list[Marked[M]]:
-        """Return every field in this config's tree that holds a ``kind`` marker.
+    def find(self, kind: type[T]) -> list[FoundTrait[T]]:
+        """Return every field in this config's tree that holds a ``kind`` trait.
 
-        Markers are attached with :func:`onefig.Field`. The walk descends into
+        Traits are attached with :func:`onefig.Field`. The walk descends into
         nested configs, including those held by tagged unions, lists, tuples and
         dicts, in declaration order.
 
         Args:
-            kind: A :class:`onefig.FieldMarker` subclass; its subclasses match too.
+            kind: A :class:`onefig.FieldTrait` subclass; its subclasses match too.
 
         Returns:
-            One :class:`onefig.Marked` per matching marker, with the field's full
-            dotted path (list entries indexed, ``cohorts.0.size``), the marker and
+            One :class:`onefig.FoundTrait` per matching trait, with the field's full
+            dotted path (list entries indexed, ``cohorts.0.size``), the trait and
             the field's current value.
         """
-        return find_markers(self, kind)
+        return find_traits(self, kind)
 
     def replace(self, updates: Mapping[str, Any]) -> Self:
         """Return a new config with ``updates`` applied, validated as a whole.

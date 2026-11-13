@@ -7,12 +7,12 @@ import pytest
 from pydantic import model_validator
 from typing_extensions import Self
 
-from onefig import ConfigError, ConfigModel, Field, FieldMarker, tagged_union
+from onefig import ConfigError, ConfigModel, Field, FieldTrait, tagged_union
 from onefig._help import format_help
 
 
 @dataclasses.dataclass(frozen=True)
-class Range(FieldMarker):
+class Range(FieldTrait):
     low: float
     high: float
 
@@ -26,7 +26,7 @@ class LogRange(Range):
 
 
 @dataclasses.dataclass(frozen=True)
-class Unit(FieldMarker):
+class Unit(FieldTrait):
     name: str
 
 
@@ -58,7 +58,7 @@ class World(ConfigModel):
         return self
 
 
-def test_find_returns_every_marker_of_a_kind_with_its_path_and_value() -> None:
+def test_find_returns_every_trait_of_a_kind_with_its_path_and_value() -> None:
     found = World().find(Range)
     assert [(m.path, m.value) for m in found] == [
         ("diseases", 2),
@@ -68,7 +68,7 @@ def test_find_returns_every_marker_of_a_kind_with_its_path_and_value() -> None:
         ("waves.0.size", None),
         ("store.rate", 0.1),
     ]
-    assert isinstance(found[1].marker, LogRange)
+    assert isinstance(found[1].trait, LogRange)
 
 
 def test_find_follows_the_current_variant_of_a_tagged_union() -> None:
@@ -86,7 +86,7 @@ def test_find_matches_only_the_kind_asked_for() -> None:
     ]
 
 
-def test_markers_survive_subclassing_the_config() -> None:
+def test_traits_survive_subclassing_the_config() -> None:
     class Bigger(World):
         extra: int = Field(0, Range(0, 2))
 
@@ -98,9 +98,9 @@ def test_field_keeps_pydantic_arguments() -> None:
         World(weight=-1)
 
 
-def test_field_rejects_objects_that_are_not_markers() -> None:
-    with pytest.raises(TypeError, match="must be FieldMarker instances"):
-        Field(1, Range(0, 1), "not a marker")  # type: ignore[arg-type]
+def test_field_rejects_objects_that_are_not_traits() -> None:
+    with pytest.raises(TypeError, match="must be FieldTrait instances"):
+        Field(1, Range(0, 1), "not a trait")  # type: ignore[arg-type]
 
 
 def test_replace_accepts_the_paths_find_returns() -> None:
@@ -141,17 +141,17 @@ def test_replace_rejects_paths_outside_the_config(path: str) -> None:
         World().replace({path: 1})
 
 
-def test_help_shows_what_a_marker_describes() -> None:
+def test_help_shows_what_a_trait_describes() -> None:
     out = format_help(World())
     assert "Drawn from 1 to 8." in out
     assert "Drawn from 0 to 1." in out  # inside the tagged union
 
 
-# ---- how marked fields are printed ----------------------------------------------
+# ---- how fields with traits are printed ----------------------------------------
 
 
 @dataclasses.dataclass(frozen=True)
-class Drawn(FieldMarker):
+class Drawn(FieldTrait):
     """Shows an unset value as drawn, and the type without ``None``."""
 
     low: int
@@ -165,8 +165,8 @@ class Drawn(FieldMarker):
 
 
 @dataclasses.dataclass(frozen=True)
-class Silent(FieldMarker):
-    """Leaves every rendering to onefig, or to the next marker."""
+class Silent(FieldTrait):
+    """Leaves every rendering to onefig, or to the next trait."""
 
 
 class Study(ConfigModel):
@@ -179,13 +179,13 @@ class Run(ConfigModel):
     studies: list[Study] = [Study(), Study(size=50)]
 
 
-def test_help_shows_a_marked_field_as_its_markers_render_it() -> None:
+def test_help_shows_a_field_as_its_traits_render_it() -> None:
     out = Run(name="r", size=3).format_help()
     assert "size : int (drawn) = 3" in out
     assert "(default: <drawn 1-8>)" in out
 
 
-def test_the_first_marker_that_renders_wins() -> None:
+def test_the_first_trait_that_renders_wins() -> None:
     assert "<drawn 10-99>" in Study().format_help()
 
 
@@ -196,7 +196,7 @@ def test_help_on_the_class_shows_defaults_and_required_fields() -> None:
     assert Study.format_help() == Study().format_help()
 
 
-def test_display_renders_marked_leaves_in_nested_lists(
+def test_display_renders_trait_leaves_in_nested_lists(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     Run(name="r").display()

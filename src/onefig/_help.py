@@ -10,8 +10,8 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 from onefig._diff import MISSING
-from onefig._markers import FieldMarker, marker_text, markers_of
 from onefig._overrides import resolve_keys
+from onefig._traits import FieldTrait, trait_text, traits_of
 from onefig._union import UnionInfo, union_info
 
 try:
@@ -145,14 +145,14 @@ def _render_field_lines(
     for idx, (name, full, info, current) in enumerate(fields):
         if idx > 0:
             out.append("")
-        markers = markers_of(info)
-        type_str = marker_text(markers, "format_type", info.annotation)
+        traits = traits_of(info)
+        type_str = trait_text(traits, "format_type", info.annotation)
         type_str = type_str or _format_type(info.annotation)
-        current_str = _shown(markers, current)
-        default_str = _format_default(info, markers)
+        current_str = _shown(traits, current)
+        default_str = _format_default(info, traits)
 
         label = name if leaf_unique.get(name, False) else full
-        notes = [info.description, *(m.describe() for m in markers)]
+        notes = [info.description, *(m.describe() for m in traits)]
 
         out.extend(
             _render_entry(
@@ -264,7 +264,7 @@ def _truncate(line: str, width: int) -> str:
     return line[: width - 1] + "…"
 
 
-def _format_default(info: FieldInfo, markers: list[FieldMarker]) -> str | None:
+def _format_default(info: FieldInfo, traits: list[FieldTrait]) -> str | None:
     if info.is_required():
         return None
     factory = info.default_factory
@@ -275,12 +275,12 @@ def _format_default(info: FieldInfo, markers: list[FieldMarker]) -> str | None:
             return "<factory>"
     else:
         value = info.default
-    return _shown(markers, value)
+    return _shown(traits, value)
 
 
-def _shown(markers: list[FieldMarker], value: Any) -> str:
-    """A field value as its markers show it, else as onefig does."""
-    return marker_text(markers, "format_value", value) or _format_value(value)
+def _shown(traits: list[FieldTrait], value: Any) -> str:
+    """A field value as its traits show it, else as onefig does."""
+    return trait_text(traits, "format_value", value) or _format_value(value)
 
 
 def _format_type(annotation: Any) -> str:

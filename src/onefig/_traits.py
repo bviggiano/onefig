@@ -1,10 +1,10 @@
-"""Field markers: typed objects a project attaches to config fields.
+"""Field traits: typed objects a project attaches to config fields.
 
-onefig does not interpret a marker. It carries the marker on the field, finds every
-field holding a given kind of marker with :meth:`ConfigModel.find`, and asks the
-marker how the field should look wherever a config is printed. What a marker means,
+onefig does not interpret a trait. It carries the trait on the field, finds every
+field holding a given kind of trait with :meth:`ConfigModel.find`, and asks the
+trait how the field should look wherever a config is printed. What a trait means,
 such as a range to draw the field's value from, is up to the project that defines
-it, and so is how its fields are shown: that lives on the marker class, never on the
+it, and so is how its fields are shown: that lives on the trait class, never on the
 configs that use it.
 """
 
@@ -21,15 +21,15 @@ from pydantic.fields import FieldInfo
 from onefig._diff import MISSING
 
 
-class FieldMarker:
-    """Base class for markers attached to config fields with :func:`Field`.
+class FieldTrait:
+    """Base class for traits attached to config fields with :func:`Field`.
 
-    Subclasses are usually frozen dataclasses. A marker can also be attached
-    through ``Annotated[int, MyMarker(...)]``.
+    Subclasses are usually frozen dataclasses. A trait can also be attached
+    through ``Annotated[int, MyTrait(...)]``.
 
-    Three hooks set how a marked field is printed. Each returns ``None`` to leave
-    onefig's own rendering, so a marker overrides only what it needs; when a field
-    has several markers, the first that returns text wins (``describe`` texts are
+    Three hooks set how a field with a trait is printed. Each returns ``None`` to leave
+    onefig's own rendering, so a trait overrides only what it needs; when a field
+    has several traits, the first that returns text wins (``describe`` texts are
     all shown).
     """
 
@@ -48,65 +48,67 @@ class FieldMarker:
         return None
 
 
-M = TypeVar("M", bound=FieldMarker)
+T = TypeVar("T", bound=FieldTrait)
 
 
 @dataclasses.dataclass(frozen=True)
-class Marked(Generic[M]):
-    """A field that holds a marker, as :meth:`ConfigModel.find` returns it."""
+class FoundTrait(Generic[T]):
+    """A field that holds a trait, as :meth:`ConfigModel.find` returns it."""
 
     path: str
     """The field's full dotted path; list and tuple entries are indexed (``a.0.b``)."""
-    marker: M
-    """The marker on the field."""
+    trait: T
+    """The trait on the field."""
     value: Any
     """The field's current value."""
 
 
-def Field(default: Any = ..., *markers: FieldMarker, **kwargs: Any) -> Any:  # noqa: N802
-    """Pydantic's ``Field``, with markers attached.
+def Field(default: Any = ..., *traits: FieldTrait, **kwargs: Any) -> Any:  # noqa: N802
+    """Pydantic's ``Field``, with traits attached.
 
     Args:
         default: The field's default; ``...`` for a required field.
-        markers: Markers to attach to the field.
+        traits: Traits to attach to the field.
         kwargs: Any other argument of :func:`pydantic.Field`.
 
     Raises:
-        TypeError: If a marker is not a :class:`FieldMarker`.
+        TypeError: If a trait is not a :class:`FieldTrait`.
     """
-    for marker in markers:
-        if not isinstance(marker, FieldMarker):
+    for trait in traits:
+        if not isinstance(trait, FieldTrait):
             raise TypeError(
-                f"Field markers must be FieldMarker instances; got {marker!r}."
+                f"Field traits must be FieldTrait instances; got {trait!r}."
             )
     info = PydanticField(default, **kwargs)
-    info.metadata.extend(markers)
+    info.metadata.extend(traits)
     return info
 
 
-def markers_of(info: FieldInfo) -> list[FieldMarker]:
-    """Return the markers on a field, in the order they were attached."""
-    return [meta for meta in info.metadata if isinstance(meta, FieldMarker)]
+def traits_of(info: FieldInfo) -> list[FieldTrait]:
+    """Return the traits on a field, in the order they were attached."""
+    return [meta for meta in info.metadata if isinstance(meta, FieldTrait)]
 
 
-def find_markers(model: BaseModel, kind: type[M]) -> list[Marked[M]]:
-    """Return every field in ``model``'s tree that holds a ``kind`` marker.
+def find_traits(model: BaseModel, kind: type[T]) -> list[FoundTrait[T]]:
+    """Return every field in ``model``'s tree that holds a ``kind`` trait.
 
     Descends into nested models, including those held by tagged unions, lists,
-    tuples and dicts. A field with several ``kind`` markers appears once per marker.
+    tuples and dicts. A field with several ``kind`` traits appears once per trait.
     """
-    return list(_iter_marked(model, "", kind))
+    return list(_iter_traits(model, "", kind))
 
 
-def _iter_marked(node: BaseModel, prefix: str, kind: type[M]) -> Iterator[Marked[M]]:
+def _iter_traits(
+    node: BaseModel, prefix: str, kind: type[T]
+) -> Iterator[FoundTrait[T]]:
     for name, info in type(node).model_fields.items():
         path = f"{prefix}{name}"
         value = getattr(node, name)
-        for marker in markers_of(info):
-            if isinstance(marker, kind):
-                yield Marked(path, marker, value)
+        for trait in traits_of(info):
+            if isinstance(trait, kind):
+                yield FoundTrait(path, trait, value)
         for child_path, child in _nested_models(value, path):
-            yield from _iter_marked(child, f"{child_path}.", kind)
+            yield from _iter_traits(child, f"{child_path}.", kind)
 
 
 def _nested_models(value: Any, path: str) -> Iterator[tuple[str, BaseModel]]:
@@ -158,7 +160,7 @@ def _key(container: Any, segment: str, path: str) -> Any:
 
 
 class Shown:
-    """A value rendered by a marker: its ``repr`` is the marker's text."""
+    """A value rendered by a trait: its ``repr`` is the trait's text."""
 
     def __init__(self, text: str) -> None:
         self.text = text
@@ -167,32 +169,32 @@ class Shown:
         return self.text
 
 
-def marker_text(markers: list[FieldMarker], hook: str, arg: Any) -> str | None:
-    """The first text a marker's ``hook`` returns for ``arg``, or ``None``."""
-    for marker in markers:
-        text = getattr(marker, hook)(arg)
+def trait_text(traits: list[FieldTrait], hook: str, arg: Any) -> str | None:
+    """The first text a trait's ``hook`` returns for ``arg``, or ``None``."""
+    for trait in traits:
+        text = getattr(trait, hook)(arg)
         if text is not None:
             return str(text)
     return None
 
 
 def value_shower(model: BaseModel) -> Callable[[str, Any], Any]:
-    """Return ``show(path, value)``: ``value`` as the markers on ``model``'s field at
+    """Return ``show(path, value)``: ``value`` as the traits on ``model``'s field at
     ``path`` render it, or ``value`` itself.
 
-    A rendered value comes back as :class:`Shown`, whose ``repr`` is the marker's
+    A rendered value comes back as :class:`Shown`, whose ``repr`` is the trait's
     text, so it drops into any printer that writes ``repr(value)``. Paths are full
     dotted paths, as :meth:`ConfigModel.to_flat_dict` gives; :data:`MISSING` and
-    paths that are not marked fields are left as they are.
+    paths of fields without traits are left as they are.
     """
-    markers: dict[str, list[FieldMarker]] = {}
-    for found in find_markers(model, FieldMarker):
-        markers.setdefault(found.path, []).append(found.marker)
+    traits: dict[str, list[FieldTrait]] = {}
+    for found in find_traits(model, FieldTrait):
+        traits.setdefault(found.path, []).append(found.trait)
 
     def show(path: str, value: Any) -> Any:
-        if path not in markers or value is MISSING:
+        if path not in traits or value is MISSING:
             return value
-        text = marker_text(markers[path], "format_value", value)
+        text = trait_text(traits[path], "format_value", value)
         return value if text is None else Shown(text)
 
     return show

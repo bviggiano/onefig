@@ -71,7 +71,7 @@ def format_diff(
             (default) auto-detects via ``sys.stdout.isatty()``.
         empty_message: Text to return when ``diff`` is empty.
         show: ``show(path, value)`` renders a value before it is printed, as
-            field markers ask; values are printed as they are when ``None``.
+            field traits ask; values are printed as they are when ``None``.
 
     Returns:
         A multi-line string ready to print.
@@ -123,7 +123,7 @@ def format_against_defaults(
             (default) auto-detects via ``sys.stdout.isatty()``.
         empty_message: Text to return when ``current`` is empty.
         show: ``show(path, value)`` renders a value before it is printed, as
-            field markers ask; values are compared before they are rendered.
+            field traits ask; values are compared before they are rendered.
 
     Returns:
         A multi-line string ready to print.

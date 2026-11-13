@@ -129,8 +129,8 @@ YAML files support `${...}` interpolation and `extends:` composition; see
   variant configs, picked by a `name` tag in YAML, CLI or env. The tag is a class
   attribute derived from the class name (`MCARConfig` → `mcar`), so variant fields
   are only real settings.
-- [**Field markers**](https://bviggiano.github.io/onefig/markers/): attach your own typed objects to fields with
-  `Field(default, *markers)`, find them anywhere in the tree with `cfg.find(Kind)`, and fill values in with `cfg.replace({...})`.
+- [**Field traits**](https://bviggiano.github.io/onefig/traits/): attach your own typed objects to fields with
+  `Field(default, *traits)`, find them anywhere in the tree with `cfg.find(Kind)`, and fill values in with `cfg.replace({...})`.
 - [**Recursive freeze**](https://bviggiano.github.io/onefig/validation/#frozen-configs) — `cfg.freeze()` makes the whole tree immutable.
 - [**Tree display**](https://bviggiano.github.io/onefig/experiments/#print-the-config-as-a-tree) — `cfg.display()` prints the config as an ASCII tree.
 - [**Auto config name**](https://bviggiano.github.io/onefig/experiments/#name-runs-with-config_name) — `cfg.config_name` is set from the YAML filename and
