@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import functools
+import inspect
 import os
 import sys
 from argparse import Namespace
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Generic, TypeVar, cast
+from typing import Any, Callable, Generic, TypeVar
 
 from omegaconf import OmegaConf
 from pydantic import (
@@ -100,7 +101,24 @@ class _class_or_instance(Generic[P, R]):  # noqa: N801 - used as a decorator
 
     def __get__(self, obj: Any, owner: type[ConfigModel]) -> Callable[P, R]:
         target = obj if obj is not None else _defaults_of(owner)
-        return cast(Callable[P, R], functools.partial(self.func, target))
+        func = self.func
+
+        @functools.wraps(func)
+        def bound(*args: P.args, **kwargs: P.kwargs) -> R:
+            return func(target, *args, **kwargs)
+
+        # help() and inspect show the method's own docstring and its signature
+        # without ``self``, as for a bound method.
+        signature = inspect.signature(func)
+        bound.__signature__ = signature.replace(  # type: ignore[attr-defined]
+            parameters=list(signature.parameters.values())[1:]
+        )
+        return bound
+
+
+def _index_of(items: list[Any] | tuple[Any, ...], segment: str) -> bool:
+    """Whether ``segment`` is an index of ``items``."""
+    return segment.isdigit() and int(segment) < len(items)
 
 
 def _defaults_of(cls: type[ConfigModel]) -> ConfigModel:
@@ -125,6 +143,26 @@ class ConfigModel(BaseModel):
         use_attribute_docstrings=True,
         ignored_types=(_class_or_instance,),
     )
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Give a field a subclass re-declares without a docstring the description
+        it had in a base class, so overriding a default keeps the field's help."""
+        super().__pydantic_init_subclass__(**kwargs)
+        inherited = False
+        for name, info in cls.model_fields.items():
+            if info.description:
+                continue
+            for base in cls.__mro__[1:]:
+                field = getattr(base, "__pydantic_fields__", {}).get(name)
+                if field is not None and field.description:
+                    info.description = field.description
+                    inherited = True
+                    break
+        if inherited:
+            # Rebuild so the JSON schema has the description too; a subclass
+            # with unresolved forward references is rebuilt later, as usual.
+            cls.model_rebuild(force=True, raise_errors=False)
 
     _frozen: bool = PrivateAttr(default=False)
     _config_name: str | None = PrivateAttr(default=None)
@@ -570,6 +608,34 @@ class ConfigModel(BaseModel):
             the field's current value.
         """
         return find_traits(self, kind)
+
+    def get(self, path: str) -> Any:
+        """Return the value at a full dotted path, the counterpart of :meth:`replace`.
+
+        Takes the paths :meth:`find` and :meth:`to_flat_dict` give, including list
+        and tuple indices (``cohorts.0.size``) and dict keys; a path may end at a
+        nested config, which is returned as is.
+
+        Args:
+            path: A full dotted path of this config.
+
+        Returns:
+            The value at ``path``.
+
+        Raises:
+            ValueError: If ``path`` is not a path of this config.
+        """
+        cursor: Any = self
+        for segment in path.split("."):
+            if isinstance(cursor, BaseModel) and segment in type(cursor).model_fields:
+                cursor = getattr(cursor, segment)
+            elif isinstance(cursor, (list, tuple)) and _index_of(cursor, segment):
+                cursor = cursor[int(segment)]
+            elif isinstance(cursor, Mapping) and segment in cursor:
+                cursor = cursor[segment]
+            else:
+                raise ValueError(f"{path!r} is not a path in this config.")
+        return cursor
 
     def replace(self, updates: Mapping[str, Any]) -> Self:
         """Return a new config with ``updates`` applied, validated as a whole.

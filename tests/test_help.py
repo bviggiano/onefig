@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import enum
+import inspect
 from typing import Literal, Optional
 
 import pytest
 from pydantic import Field
 
-from onefig import ConfigModel, tagged_union
+from onefig import ConfigModel, field_docs, tagged_union
 from onefig._help import format_help
 
 
@@ -325,3 +326,40 @@ def test_union_panel_follows_the_current_variant() -> None:
     assert "(default: 'informative')" in " ".join(out.replace("│", " ").split())
     assert "rate : float = 0.1" in out
     assert "severity_slope" not in out
+
+
+class _Base(ConfigModel):
+    genes: tuple[str, ...] = ()
+    """Genes with published evidence."""
+    size: int = 1
+    """How many."""
+
+
+class _Specific(_Base):
+    genes: tuple[str, ...] = ("TTN",)
+    size: int = 2
+    """Its own docstring wins."""
+
+
+def test_a_redeclared_field_keeps_the_description_of_its_base() -> None:
+    fields = _Specific.model_fields
+    assert fields["genes"].description == "Genes with published evidence."
+    assert fields["size"].description == "Its own docstring wins."
+    schema = _Specific.model_json_schema()["properties"]
+    assert schema["genes"]["description"] == "Genes with published evidence."
+    assert "Genes with published evidence." in format_help(_Specific())
+    assert field_docs(_Specific)["genes"] == "Genes with published evidence."
+
+
+def test_help_writes_a_variadic_tuple_with_an_ellipsis() -> None:
+    out = format_help(_Specific())
+    assert "tuple[str, ...]" in out and "Ellipsis" not in out
+
+
+@pytest.mark.parametrize("where", ["class", "instance"])
+def test_help_methods_keep_their_docstrings_and_signatures(where: str) -> None:
+    owner = _Cfg if where == "class" else _Cfg()
+    for name in ("format_help", "print_help"):
+        method = getattr(owner, name)
+        assert method.__doc__ == ConfigModel.__dict__[name].func.__doc__
+        assert list(inspect.signature(method).parameters) == ["title"]
