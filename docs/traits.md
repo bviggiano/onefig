@@ -100,6 +100,10 @@ resolved = cfg.replace(drawn).freeze()
 An unknown path raises `ValueError`; a value that fails validation raises
 `ConfigError`.
 
+`cfg.get(path)` reads a value by the same paths, list indices and dict keys
+included, so a value `find` or `to_flat_dict` named can be read back:
+`cfg.get("cohorts.0.size")`. An unknown path raises `ValueError`.
+
 ## How fields with traits are printed
 
 A trait decides how its fields look wherever a config is printed, through three

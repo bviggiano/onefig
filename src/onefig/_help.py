@@ -286,6 +286,8 @@ def _shown(traits: list[FieldTrait], value: Any) -> str:
 def _format_type(annotation: Any) -> str:
     if annotation is None or annotation is type(None):
         return "None"
+    if annotation is Ellipsis:  # the ``...`` of ``tuple[int, ...]``
+        return "..."
 
     origin = get_origin(annotation)
     args = get_args(annotation)

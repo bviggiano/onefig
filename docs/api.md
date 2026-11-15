@@ -22,6 +22,7 @@ cfg.commit_hash                              # str | None — git HEAD captured 
 # Field traits (see Field traits guide)
 cfg.find(Range)                              # [FoundTrait(path, trait, value), ...]
 cfg.replace({"cohorts.0.size": 900})         # new validated copy
+cfg.get("cohorts.0.size")                    # read a value by the same paths
 
 # Field docs (see Documenting fields)
 field_docs(MyCfg)                            # {field: docstring}; dataclasses too

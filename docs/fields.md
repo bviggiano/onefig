@@ -17,7 +17,10 @@ class Genes:
 
 `onefig.field_docs(cls)` returns `{field: docstring}` in field order, for a pydantic
 model (a `ConfigModel` included) or a dataclass. A dataclass subclass's docstring for
-an inherited field replaces the base's; fields without one are left out.
+an inherited field replaces the base's; fields without one are left out. A
+`ConfigModel` subclass that re-declares a field without a docstring, to give it
+another default, keeps the base's description, in `field_docs`, the help and the
+JSON schema alike.
 
 ```python
 field_docs(Genes)

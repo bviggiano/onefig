@@ -216,3 +216,20 @@ def test_diff_from_defaults_compares_values_before_rendering_them() -> None:
 def test_diff_renders_both_sides() -> None:
     out = Run(name="r").format_diff(Run(name="r", size=4), color=False)
     assert out.split() == ["size", "<drawn", "1-8>", "→", "4"]
+
+
+def test_get_reads_the_paths_find_and_replace_take() -> None:
+    world = World().replace({"cohorts.1.size": 900})
+    assert world.get("cohorts.1.size") == 900
+    assert world.get("weight") == world.weight
+    assert world.get("cohorts.0") == world.cohorts[0]
+    for found in world.find(Range):
+        assert world.get(found.path) == found.value
+
+
+@pytest.mark.parametrize(
+    "path", ["missing", "cohorts.5.size", "cohorts.x", "waves.1.size", "weight.x"]
+)
+def test_get_rejects_paths_outside_the_config(path: str) -> None:
+    with pytest.raises(ValueError, match="is not a path in this config"):
+        World().get(path)
