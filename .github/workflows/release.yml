@@ -1,26 +1,95 @@
 name: release
 
+# Every push to main that passes CI is released to PyPI. The patch version is
+# bumped automatically; for a minor or major release, set the new version in
+# src/onefig/__init__.py in the PR and it is used as-is.
 on:
-  push:
-    tags: ["v*"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   build:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the version bump commit and tag
+    outputs:
+      released: ${{ steps.version.outputs.version != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      - name: Choose version
+        id: version
+        run: |
+          if [ -n "$(git tag --points-at HEAD 'v*')" ]; then
+            echo "HEAD is already released; nothing to do."
+            exit 0
+          fi
+          version=$(python - <<'EOF'
+          import re
+          import subprocess
+
+          def parse(v):
+              return tuple(int(p) for p in v.split("."))
+
+          path = "src/onefig/__init__.py"
+          source = open(path).read()
+          current = re.search(r'__version__ = "([^"]+)"', source).group(1)
+          tags = subprocess.run(
+              ["git", "tag", "--list", "v*"], capture_output=True, text=True, check=True
+          ).stdout.split()
+          latest = max((parse(t[1:]) for t in tags), default=(0, 0, 0))
+          if parse(current) > latest:
+              version = current
+          else:
+              major, minor, patch = latest
+              version = f"{major}.{minor}.{patch + 1}"
+          open(path, "w").write(
+              source.replace(f'__version__ = "{current}"', f'__version__ = "{version}"')
+          )
+          print(version)
+          EOF
+          )
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
+
       - name: Build sdist and wheel
+        if: steps.version.outputs.version != ''
         run: |
           python -m pip install --upgrade pip build
           python -m build
 
+      - name: Commit and tag
+        if: steps.version.outputs.version != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git commit -am "Release $VERSION"
+          fi
+          git tag "v$VERSION"
+          # Fails if main moved on; the newer push's run releases instead.
+          git push origin HEAD:main "v$VERSION"
+
       - name: Upload distributions
+        if: steps.version.outputs.version != ''
         uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -28,6 +97,7 @@ jobs:
 
   publish:
     needs: build
+    if: needs.build.outputs.released == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
