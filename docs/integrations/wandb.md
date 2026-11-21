@@ -30,7 +30,7 @@ A malformed sweep is reported before it ever reaches wandb:
   (log-space ones must be `> 0`), `normal`/`log_normal` need `mu`/`sigma`, quantized `q_*` distributions need
   `q`, and `categorical` needs `values` (with matching `probabilities` that sum to 1).
 
-`to_wandb()` returns the plain dict `wandb.sweep()` expects.
+`to_wandb()` returns the plain dict `wandb.sweep()` expects. A range keeps its bounds as written, so `{min: 8, max: 64}` reaches wandb as ints and is drawn as ints, as wandb does for a range of two ints.
 
 ## Validate against your config
 
@@ -53,3 +53,26 @@ It reports — all at once, before the sweep launches — a swept value outside 
 
 Because it routes values through the target config's own validators, it catches everything that config would
 reject — bounds, enums, types, and cross-field constraints — with no rules duplicated here.
+
+## List a sweep's trials
+
+Grid and random sweeps are fully decided before any trial runs, so `trials()` lists their trials without wandb's
+sweep server, as `{dotted path: value}` dicts:
+
+```python
+base = MyRunConfig.load("base.yaml")
+for overrides in WandbSweepConfig.load("sweep.yaml").trials():
+    train(base.replace(overrides))
+```
+
+- **Grid** runs every combination of each parameter's `values` (or `value`), in parameter-path order.
+- **Random** draws `run_cap` trials, or `trials(count)`. A parameter is drawn as wandb's random search draws it:
+  from `values` (weighted by `probabilities`), from a `min`/`max` range (ints when both bounds are ints), or from a
+  `uniform`, `int_uniform` or `log_uniform_values` distribution.
+- **Repeatable:** the draws are seeded by the sweep itself, so the same sweep always lists the same trials. Pass
+  `seed=` for a different draw.
+- **Nested** parameter groups are keyed by their dotted path, e.g. `optimizer.lr`.
+
+Bayes search picks each trial from the results of the ones before it, and `early_terminate` stops trials by
+comparing their results as they run, so a sweep using either raises `ConfigError`, as does a random sweep with no
+count or a distribution `trials()` does not draw.

@@ -15,7 +15,7 @@ the *format* is modeled, never the tool's Python package, importing an integrati
 
 `WandbSweepConfig` validates a wandb sweep config the moment you load it: mistyped keys, malformed
 distributions, a continuous range under grid search, and swept values your own config would reject are all
-caught before the sweep launches.
+caught before the sweep launches. `trials()` lists a grid or random sweep's trials without wandb's sweep server.
 
 `onefig.integrations.wandb` · [Learn more →](wandb.md)
 
