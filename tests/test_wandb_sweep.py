@@ -243,3 +243,104 @@ def test_validate_against_checks_metric_name() -> None:
     with pytest.raises(ConfigError) as excinfo:
         sweep.validate_against(_Run(), logged_metrics={"val/loss", "val/acc"})
     assert "did you mean 'val/loss'" in str(excinfo.value)
+
+
+def test_range_bounds_keep_their_written_type(tmp_path: Path) -> None:
+    """Integer bounds stay integers, so wandb draws the range as ints."""
+    path = tmp_path / "sweep.yaml"
+    path.write_text(
+        "method: random\nparameters:\n"
+        "  batch_size: {min: 8, max: 64}\n  warmup: {min: 0.0, max: 0.2}\n"
+    )
+    params = WandbSweepConfig.load(str(path)).to_wandb()["parameters"]
+    assert params["batch_size"] == {"min": 8, "max": 64}
+    assert all(isinstance(bound, int) for bound in params["batch_size"].values())
+    assert all(isinstance(bound, float) for bound in params["warmup"].values())
+
+
+RANDOM = {
+    "method": "random",
+    "run_cap": 20,
+    "parameters": {
+        "trainer.batch_size": {"min": 8, "max": 64},
+        "scheduler.warmup": {"min": 0.0, "max": 0.2},
+        "optimizer": {
+            "parameters": {
+                "lr": {
+                    "distribution": "log_uniform_values",
+                    "min": 1e-6,
+                    "max": 1e-3,
+                },
+            }
+        },
+        "pooling": {"values": ["mean", "cls"], "probabilities": [0.5, 0.5]},
+    },
+}
+
+
+def test_trials_lists_a_sweeps_trials() -> None:
+    """A grid is every combination; a random sweep draws the same trials each time."""
+    grid = WandbSweepConfig(
+        method="grid",
+        parameters={
+            "b": {"values": [1, 2]},
+            "a": {"parameters": {"x": {"values": ["p", "q"]}}},
+            "c": {"value": 0},
+        },
+    )
+    assert grid.trials() == [
+        {"a.x": x, "b": b, "c": 0} for x in ("p", "q") for b in (1, 2)
+    ]
+
+    sweep = WandbSweepConfig(**RANDOM)
+    trials = sweep.trials()
+    assert trials == WandbSweepConfig(**RANDOM).trials()
+    assert trials != sweep.trials(seed=1)
+    assert len(trials) == 20 and len(sweep.trials(3)) == 3
+    for trial in trials:
+        assert isinstance(trial["trainer.batch_size"], int)
+        assert 8 <= trial["trainer.batch_size"] <= 64
+        assert isinstance(trial["scheduler.warmup"], float)
+        assert 0.0 <= trial["scheduler.warmup"] <= 0.2
+        assert 1e-6 <= trial["optimizer.lr"] <= 1e-3
+        assert trial["pooling"] in ("mean", "cls")
+
+
+@pytest.mark.parametrize(
+    ("cfg", "message"),
+    [
+        (
+            {
+                "method": "bayes",
+                "metric": {"name": "loss"},
+                "parameters": {"a": {"values": [1]}},
+            },
+            "bayes",
+        ),
+        (
+            {
+                "method": "grid",
+                "early_terminate": {"type": "hyperband", "min_iter": 1},
+                "parameters": {"a": {"values": [1]}},
+            },
+            "early_terminate",
+        ),
+        (
+            {"method": "random", "parameters": {"a": {"min": 0.0, "max": 1.0}}},
+            "run_cap",
+        ),
+        (
+            {
+                "method": "random",
+                "run_cap": 2,
+                "parameters": {
+                    "a": {"distribution": "normal", "mu": 0.0, "sigma": 1.0}
+                },
+            },
+            "a \\(normal\\)",
+        ),
+    ],
+)
+def test_trials_refuses_a_sweep_it_cannot_list(cfg: dict, message: str) -> None:
+    with pytest.raises(ConfigError, match=message):
+        WandbSweepConfig(**cfg).trials()

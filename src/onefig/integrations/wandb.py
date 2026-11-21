@@ -7,12 +7,20 @@ the moment the file misspecifies the format — a mistyped key, a distribution
 missing a required argument, a continuous range under grid search, or a bayes
 sweep with no metric. Only the *format* is modeled, so this module never imports
 wandb and adds no dependency.
+
+Grid and random sweeps are fully decided before any trial runs, so
+:meth:`WandbSweepConfig.trials` lists their trials without wandb's sweep server.
 """
 
 from __future__ import annotations
 
 import difflib
+import hashlib
+import json
+import math
+import random
 from collections.abc import Iterable, Iterator
+from itertools import product
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
@@ -40,6 +48,8 @@ _RANGE_DISTS = frozenset(
 _NORMAL_DISTS = frozenset({"normal", "q_normal", "log_normal", "q_log_normal"})
 # Range distributions in log space, whose bounds must be strictly positive.
 _LOG_RANGE_DISTS = frozenset({d for d in _RANGE_DISTS if "log" in d})
+# Range distributions WandbSweepConfig.trials draws from.
+_DRAWN_DISTS = ("uniform", "int_uniform", "log_uniform_values")
 
 Distribution = Literal[
     "constant",
@@ -84,8 +94,9 @@ class SweepParameter(BaseModel):
     values: list[Any] | None = None
     probabilities: list[float] | None = None
     distribution: Distribution | None = None
-    min: float | None = None
-    max: float | None = None
+    # Kept as written: wandb draws a range whose bounds are both ints as ints.
+    min: int | float | None = None
+    max: int | float | None = None
     mu: float | None = None
     sigma: float | None = None
     q: float | None = None
@@ -125,6 +136,38 @@ class SweepParameter(BaseModel):
         if self.mu is not None:
             out.append((self.mu, "mu"))
         return out
+
+    def sample(self, rng: random.Random) -> Any:
+        """Draw one value as wandb's random search would.
+
+        A range without a ``distribution`` is ``int_uniform`` when both bounds are
+        ints and ``uniform`` otherwise, as in wandb.
+
+        Raises:
+            ConfigError: For a nested group, or a distribution other than
+                ``constant``, ``categorical``, ``uniform``, ``int_uniform`` or
+                ``log_uniform_values``.
+        """
+        if self.parameters is not None:
+            raise ConfigError("a nested `parameters` group draws each child instead")
+        if self.value is not None:
+            return self.value
+        if self.values is not None:
+            return rng.choices(self.values, weights=self.probabilities)[0]
+        low, high = self.min, self.max
+        if low is None or high is None:
+            raise ConfigError(f"distribution {self.distribution!r} is not drawn here")
+        integers = isinstance(low, int) and isinstance(high, int)
+        dist = self.distribution or ("int_uniform" if integers else "uniform")
+        if dist == "int_uniform":
+            return rng.randint(math.ceil(low), math.floor(high))
+        if dist == "uniform":
+            return rng.uniform(low, high)
+        if dist == "log_uniform_values":
+            return math.exp(rng.uniform(math.log(low), math.log(high)))
+        raise ConfigError(
+            f"distribution {dist!r} is not drawn here, only {', '.join(_DRAWN_DISTS)}"
+        )
 
     def _set_scalar_keys(self) -> set[str]:
         return {key for key in _SCALAR_KEYS if getattr(self, key) is not None}
@@ -259,13 +302,68 @@ class WandbSweepConfig(ConfigModel):
         """The plain dict ``wandb.sweep()`` expects (unset keys dropped)."""
         return self.model_dump(exclude_none=True)
 
+    def trials(
+        self, count: int | None = None, *, seed: int | str | None = None
+    ) -> list[dict[str, Any]]:
+        """Every trial a grid or random sweep runs, as ``{dotted path: value}``.
+
+        Grid search runs every combination of each parameter's ``values`` (or
+        ``value``), in parameter-path order. Random search draws ``count`` trials,
+        ``run_cap`` by default, each parameter as :meth:`SweepParameter.sample`
+        draws it. The draws are seeded by the sweep itself unless ``seed`` is
+        given, so the same sweep always lists the same trials. A nested group's
+        parameters are keyed by their dotted path, as in :meth:`validate_against`.
+
+        Raises:
+            ConfigError: For a sweep that needs wandb's sweep server (bayes search,
+                which picks each trial from the results before it, or
+                ``early_terminate``, which stops trials by comparing them as they
+                run), a random sweep with neither ``count`` nor ``run_cap``, or a
+                distribution :meth:`SweepParameter.sample` does not draw.
+        """
+        if self.method == "bayes":
+            raise ConfigError(
+                "bayes search picks each trial from the results of the ones before it,"
+                " so its trials can't be listed in advance"
+            )
+        if self.early_terminate is not None:
+            raise ConfigError(
+                "early_terminate stops trials by comparing their results as they run,"
+                " so a sweep that uses it can't be listed in advance"
+            )
+        leaves = sorted(self._leaf_parameters(), key=lambda leaf: leaf[0])
+        paths = [path for path, _ in leaves]
+        if self.method == "grid":
+            choices = [
+                [param.value] if param.values is None else param.values
+                for _, param in leaves
+            ]
+            return [dict(zip(paths, combination)) for combination in product(*choices)]
+        count = self.run_cap if count is None else count
+        if count is None:
+            raise ConfigError(
+                "a random sweep's trials need a count: pass one or set `run_cap`"
+            )
+        if seed is None:
+            seed = json.dumps(self.to_wandb(), sort_keys=True, default=str)
+        rng = random.Random(hashlib.sha256(str(seed).encode()).digest())
+        undrawn = [
+            f"{path} ({param.distribution})"
+            for path, param in leaves
+            if param.distribution
+            not in (None, "constant", "categorical", *_DRAWN_DISTS)
+        ]
+        if undrawn:
+            raise ConfigError(
+                f"only {', '.join(_DRAWN_DISTS)} ranges are drawn here, not "
+                + ", ".join(undrawn)
+            )
+        return [
+            {path: param.sample(rng) for path, param in leaves} for _ in range(count)
+        ]
+
     def _leaf_parameters(self) -> Iterator[tuple[str, SweepParameter]]:
-        for path, param in self.parameters.items():
-            if param.parameters is not None:
-                for sub, child in param.parameters.items():
-                    yield f"{path}.{sub}", child
-            else:
-                yield path, param
+        return _leaves(self.parameters, "")
 
     def validate_against(
         self, base: ConfigModel, *, logged_metrics: Iterable[str] | None = None
@@ -309,6 +407,17 @@ class WandbSweepConfig(ConfigModel):
             raise ConfigError(
                 header + "".join(f"\n  - {problem}" for problem in problems)
             )
+
+
+def _leaves(
+    parameters: dict[str, SweepParameter], prefix: str
+) -> Iterator[tuple[str, SweepParameter]]:
+    """Every swept parameter under ``parameters`` by dotted path, at any depth."""
+    for name, param in parameters.items():
+        if param.parameters is not None:
+            yield from _leaves(param.parameters, f"{prefix}{name}.")
+        else:
+            yield f"{prefix}{name}", param
 
 
 def _did_you_mean(name: str, options: Iterable[str]) -> str:

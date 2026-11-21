@@ -30,7 +30,8 @@ Configuration management is at the heart of most ML workflows, but can be wildly
 <a href="https://bviggiano.github.io/onefig/integrations/"><img src="https://raw.githubusercontent.com/bviggiano/onefig/main/assets/wandb-logo.svg" alt="Weights & Biases" height="22"></a>
 
 `WandbSweepConfig` validates a wandb sweep config as soon as you load it, catching
-bad distributions or out-of-bounds values before the sweep launches. See
+bad distributions or out-of-bounds values before the sweep launches, and lists a
+grid or random sweep's trials without wandb's sweep server. See
 the [integrations docs](https://bviggiano.github.io/onefig/integrations/).
 
 ## Quickstart
